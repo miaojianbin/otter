@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build release packages
+        run: mvn -B -DskipTests -Dmaven.javadoc.skip=true -Denv=release clean package
+
+      - name: List release packages
+        run: ls -lh target/*.tar.gz
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG_NAME" target/*.tar.gz \
+            --title "$TAG_NAME" \
+            --notes "Automated Otter release built by GitHub Actions."
