@@ -25,7 +25,7 @@ jobs:
 
       - name: Install bundled Maven dependencies
         working-directory: lib
-        run: ./install.sh
+        run: bash ./install.sh
 
       - name: Build release packages
         run: mvn -B -DskipTests -Dmaven.javadoc.skip=true -Denv=release clean package
