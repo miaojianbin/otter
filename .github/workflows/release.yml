@@ -23,6 +23,10 @@ jobs:
           java-version: "17"
           cache: maven
 
+      - name: Install bundled Maven dependencies
+        working-directory: lib
+        run: ./install.sh
+
       - name: Build release packages
         run: mvn -B -DskipTests -Dmaven.javadoc.skip=true -Denv=release clean package
 
