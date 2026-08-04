@@ -39,7 +39,7 @@ import com.google.common.collect.OtterMigrateMap;
  */
 public class DubboCommunicationConnectionFactory implements CommunicationConnectionFactory {
 
-    private final String                       DUBBO_SERVICE_URL = "dubbo://{0}:{1}/endpoint?client=netty&codec=dubbo&serialization=java&lazy=true&iothreads=4&threads=50&connections=30&acceptEvent.timeout=50000&payload={2}";
+    private final String                       DUBBO_SERVICE_URL = "dubbo://{0}:{1}/endpoint?client=netty4&codec=dubbo&serialization=java&lazy=true&iothreads=4&threads=50&connections=30&acceptEvent.timeout=50000&payload={2}";
 
     private DubboProtocol                      protocol          = DubboProtocol.getDubboProtocol();
     private ProxyFactory                       proxyFactory      = ExtensionLoader.getExtensionLoader(ProxyFactory.class)

@@ -28,6 +28,10 @@
 			<artifactId>citrus-webx-all</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.dom4j</groupId>
+			<artifactId>dom4j</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.directwebremoting</groupId>
 			<artifactId>dwr</artifactId>
 		</dependency>

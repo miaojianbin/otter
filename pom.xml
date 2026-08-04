@@ -112,14 +112,21 @@
         <maven.test.skip>true</maven.test.skip>
         <downloadSources>true</downloadSources>
         <!-- compiler settings properties -->
-        <java_source_version>1.6</java_source_version>
-        <java_target_version>1.6</java_target_version>
+        <java_source_version>1.8</java_source_version>
+        <java_target_version>1.8</java_target_version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<file_encoding>UTF-8</file_encoding>
 		<spring-version>3.1.2.RELEASE</spring-version>
-		<jetty_verion>8.1.7.v20120910</jetty_verion>
-		<logback_version>1.2.9</logback_version>
-		<slf4j_version>1.7.12</slf4j_version>
+		<jetty_verion>9.4.57.v20241219</jetty_verion>
+		<logback_version>1.3.16</logback_version>
+		<slf4j_version>2.0.18</slf4j_version>
+		<snakeyaml_version>2.6</snakeyaml_version>
+		<netty_all_version>4.1.136.Final</netty_all_version>
+		<netty_tcnative_version>2.0.81.Final</netty_tcnative_version>
+		<hessian_lite_version>3.2.13</hessian_lite_version>
+		<zookeeper_version>3.9.5</zookeeper_version>
+		<h2_version>2.2.224</h2_version>
+		<dom4j_version>2.1.4</dom4j_version>
 		<otter_canal_version>1.1.5</otter_canal_version>
 	</properties>
 
@@ -131,6 +138,13 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-bom</artifactId>
+				<version>${netty_all_version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<!-- commons -->
             <dependency>
 				<groupId>commons-dbcp</groupId>
@@ -155,37 +169,117 @@
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-compress</artifactId>
-                <version>1.21</version>
+                <version>1.28.0</version>
             </dependency>
-			<dependency>
-				<groupId>commons-io</groupId>
-				<artifactId>commons-io</artifactId>
-				<version>2.7</version>
-			</dependency>
+				<dependency>
+					<groupId>commons-io</groupId>
+					<artifactId>commons-io</artifactId>
+					<version>2.22.0</version>
+				</dependency>
 			<dependency>
 				<groupId>commons-beanutils</groupId>
 				<artifactId>commons-beanutils</artifactId>
-				<version>1.9.4</version>
+				<version>1.11.0</version>
+			</dependency>
+			<dependency>
+				<groupId>commons-fileupload</groupId>
+				<artifactId>commons-fileupload</artifactId>
+				<version>1.6.0</version>
 			</dependency>
 			<dependency>
 				<groupId>commons-collections</groupId>
 				<artifactId>commons-collections</artifactId>
 				<version>3.2.2</version>
 			</dependency>
-			<dependency>
-				<groupId>com.alibaba</groupId>
-				<artifactId>fastjson</artifactId>
-				<version>1.2.70</version>
-			</dependency>
-			<dependency>
-				<groupId>com.google.guava</groupId>
-				<artifactId>guava</artifactId>
-				<version>18.0</version>
-			</dependency>
+				<dependency>
+					<groupId>com.alibaba</groupId>
+					<artifactId>fastjson</artifactId>
+					<version>1.2.83</version>
+				</dependency>
+				<dependency>
+					<groupId>com.google.guava</groupId>
+					<artifactId>guava</artifactId>
+					<version>33.6.0-jre</version>
+				</dependency>
+				<dependency>
+					<groupId>com.cedarsoftware</groupId>
+					<artifactId>json-io</artifactId>
+					<version>4.110.0</version>
+				</dependency>
+				<dependency>
+					<groupId>com.fasterxml.jackson.core</groupId>
+					<artifactId>jackson-core</artifactId>
+					<version>2.22.1</version>
+				</dependency>
 			<dependency>
 				<groupId>com.google.protobuf</groupId>
 				<artifactId>protobuf-java</artifactId>
-				<version>3.16.1</version>
+				<version>4.35.1</version>
+			</dependency>
+			<dependency>
+				<groupId>org.yaml</groupId>
+				<artifactId>snakeyaml</artifactId>
+				<version>${snakeyaml_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-all</artifactId>
+				<version>${netty_all_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-tcnative-boringssl-static</artifactId>
+				<version>${netty_tcnative_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-tcnative-classes</artifactId>
+				<version>${netty_tcnative_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-tcnative-boringssl-static</artifactId>
+				<classifier>linux-x86_64</classifier>
+				<version>${netty_tcnative_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-tcnative-boringssl-static</artifactId>
+				<classifier>linux-aarch_64</classifier>
+				<version>${netty_tcnative_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-tcnative-boringssl-static</artifactId>
+				<classifier>osx-x86_64</classifier>
+				<version>${netty_tcnative_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-tcnative-boringssl-static</artifactId>
+				<classifier>osx-aarch_64</classifier>
+				<version>${netty_tcnative_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-tcnative-boringssl-static</artifactId>
+				<classifier>windows-x86_64</classifier>
+				<version>${netty_tcnative_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.alibaba</groupId>
+				<artifactId>hessian-lite</artifactId>
+				<version>${hessian_lite_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.h2database</groupId>
+				<artifactId>h2</artifactId>
+				<version>${h2_version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.dom4j</groupId>
+				<artifactId>dom4j</artifactId>
+				<version>${dom4j_version}</version>
 			</dependency>
             <dependency>
                 <groupId>com.alibaba</groupId>
@@ -201,7 +295,7 @@
 			<dependency>
 				<groupId>org.apache.zookeeper</groupId>
 				<artifactId>zookeeper</artifactId>
-				<version>3.4.14</version>
+				<version>${zookeeper_version}</version>
 				<exclusions>
 				  <exclusion>
 						<groupId>org.slf4j</groupId>
@@ -216,6 +310,14 @@
 						<artifactId>log4j</artifactId>
 				  </exclusion>
 				  <exclusion>
+						<groupId>ch.qos.logback</groupId>
+						<artifactId>logback-core</artifactId>
+				  </exclusion>
+				  <exclusion>
+						<groupId>ch.qos.logback</groupId>
+						<artifactId>logback-classic</artifactId>
+				  </exclusion>
+				  <exclusion>
 						<groupId>jline</groupId>
 						<artifactId>jline</artifactId>
 				  </exclusion>
@@ -226,12 +328,17 @@
 				<artifactId>zkclient</artifactId>
 				<version>0.10</version>
 			</dependency>
-			<!-- mysql -->
-			<dependency>
-				<groupId>mysql</groupId>
-				<artifactId>mysql-connector-java</artifactId>
-				<version>5.1.47</version>
-			</dependency>
+				<!-- mysql -->
+				<dependency>
+					<groupId>com.mysql</groupId>
+					<artifactId>mysql-connector-j</artifactId>
+					<version>8.4.0</version>
+				</dependency>
+				<dependency>
+					<groupId>org.mybatis</groupId>
+					<artifactId>mybatis</artifactId>
+					<version>3.5.19</version>
+				</dependency>
             <!-- oracle -->
 			<dependency>
 				<groupId>com.oracle</groupId>
@@ -337,6 +444,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-source-plugin</artifactId>
+				<version>3.3.1</version>
 				<executions>
 					<execution>
 						<id>attach-sources</id>
@@ -349,6 +457,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.13.0</version>
 				<configuration>
 					<source>${java_source_version}</source>
 					<target>${java_target_version}</target>
@@ -373,6 +482,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
+				<version>3.4.2</version>
 				<configuration>
 					<excludes>
 						<exclude>**/.svn/**</exclude>

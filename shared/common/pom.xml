@@ -117,6 +117,10 @@
 			<artifactId>ddlutils</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.dom4j</groupId>
+			<artifactId>dom4j</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.jtester</groupId>
 			<artifactId>jtester</artifactId>
 			<scope>provided</scope>

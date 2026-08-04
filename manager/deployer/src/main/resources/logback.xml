@@ -9,13 +9,11 @@
 	<appender name="WEBX-ROOT" class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<append>true</append>
         <file>../logs/manager.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
           <!-- daily rollover -->
           <fileNamePattern>../logs/%d{yyyy-MM-dd}/manager-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
-		  <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
             <!-- or whenever the file size reaches 100MB -->
             <maxFileSize>30MB</maxFileSize>
-          </timeBasedFileNamingAndTriggeringPolicy>
           <!-- keep 180 days' worth of history -->
           <maxHistory>180</maxHistory>
         </rollingPolicy>
@@ -27,13 +25,11 @@
 	<appender name="COMMUNICATION" class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<append>true</append>
         <file>../logs/communication.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
           <!-- daily rollover -->
           <fileNamePattern>../logs/%d{yyyy-MM-dd}/communication-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
-		  <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
             <!-- or whenever the file size reaches 100MB -->
             <maxFileSize>30MB</maxFileSize>
-          </timeBasedFileNamingAndTriggeringPolicy>
           <!-- keep 180 days' worth of history -->
           <maxHistory>180</maxHistory>
         </rollingPolicy>
@@ -45,13 +41,11 @@
 	<appender name="ALARM" class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<append>true</append>
         <file>../logs/alarm.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
           <!-- daily rollover -->
           <fileNamePattern>../logs/%d{yyyy-MM-dd}/alarm-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
-		  <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
             <!-- or whenever the file size reaches 100MB -->
             <maxFileSize>30MB</maxFileSize>
-          </timeBasedFileNamingAndTriggeringPolicy>
           <!-- keep 180 days' worth of history -->
           <maxHistory>180</maxHistory>
         </rollingPolicy>
@@ -62,13 +56,11 @@
 	<appender name="monitorInfo" class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<append>true</append>
         <file>../logs/monitor_info.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
           <!-- daily rollover -->
           <fileNamePattern>../logs/%d{yyyy-MM-dd}/monitor_info-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
-		  <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
             <!-- or whenever the file size reaches 100MB -->
             <maxFileSize>30MB</maxFileSize>
-          </timeBasedFileNamingAndTriggeringPolicy>
           <!-- keep 180 days' worth of history -->
           <maxHistory>180</maxHistory>
         </rollingPolicy>
@@ -79,13 +71,11 @@
 	<appender name="monitorTrigger" class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<append>true</append>
         <file>../logs/monitor_trigger.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
           <!-- daily rollover -->
           <fileNamePattern>../logs/%d{yyyy-MM-dd}/monitor_trigger-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
-		  <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
             <!-- or whenever the file size reaches 100MB -->
             <maxFileSize>30MB</maxFileSize>
-          </timeBasedFileNamingAndTriggeringPolicy>
           <!-- keep 180 days' worth of history -->
           <maxHistory>180</maxHistory>
         </rollingPolicy>
@@ -96,13 +86,11 @@
 	<appender name="position" class="ch.qos.logback.core.rolling.RollingFileAppender">
 		<append>true</append>
         <file>../logs/position.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
           <!-- daily rollover -->
           <fileNamePattern>../logs/%d{yyyy-MM-dd}/position-%d{yyyy-MM-dd}-%i.log</fileNamePattern>
-		  <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
             <!-- or whenever the file size reaches 100MB -->
             <maxFileSize>30MB</maxFileSize>
-          </timeBasedFileNamingAndTriggeringPolicy>
           <!-- keep 180 days' worth of history -->
           <maxHistory>180</maxHistory>
         </rollingPolicy>

@@ -167,8 +167,10 @@ public class NioUtilsPerformance {
                             return null;
                         }
                         clean.setAccessible(true);
-                        sun.misc.Cleaner cleaner = (sun.misc.Cleaner) clean.invoke(buffer, new Object[0]);
-                        cleaner.clean();
+                        Object cleaner = clean.invoke(buffer, new Object[0]);
+                        if (cleaner != null) {
+                            cleaner.getClass().getMethod("clean").invoke(cleaner);
+                        }
                     } catch (Throwable ex) {
                     }
 
