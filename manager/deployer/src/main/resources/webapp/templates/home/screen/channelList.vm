@@ -134,6 +134,10 @@ $control.setTemplate("home:navigation.vm")
 								<span class="ico_line">|</span><a href="javascript:if(confirm('确实推送Channel吗?'))location='$notifyURL'"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">推送</span></a>
 							#end
 							#if($channel.status.isStop() || $channel.status.isPause())
+								#if($channel.status.isStop())
+									#set ($fullSyncURL = $homeModule.setAction("fullSyncAction").addQueryData("channelId", $channel.id).addQueryData("eventSubmitDoCreate", "true").render())
+									<span class="ico_line">|</span><a href="javascript:if(confirm('全量同步会删除并重建目标表，确定继续吗?'))location='$fullSyncURL'"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">全量同步</span></a>
+								#end
 								#set($flag_go = false)
 								#set($flag_back = false)
 								#set($delFlag = false)

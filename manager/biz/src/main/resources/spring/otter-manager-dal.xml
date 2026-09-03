@@ -58,6 +58,8 @@
 		class="com.alibaba.otter.manager.biz.config.parameter.dal.ibatis.IbatisSystemParameterDAO" />
 	<bean id="logRecordDao"
 		class=" com.alibaba.otter.manager.biz.config.record.dal.ibatis.IbatisLogRecordDAO" />
+	<bean id="fullSyncTaskDao"
+		class="com.alibaba.otter.manager.biz.fullsync.dal.ibatis.IbatisFullSyncTaskDAO" />
 	<bean id="alarmRuleDao"
 		class="com.alibaba.otter.manager.biz.config.alarm.dal.ibatis.IbatisAlarmRuleDAO" />
 	<bean id="autoKeeperClusterDao"

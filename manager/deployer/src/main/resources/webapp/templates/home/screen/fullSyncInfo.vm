@@ -1,0 +1,24 @@
+$control.setTemplate("home:navigation.vm")
+#if($task.status == "RUNNING")
+<script type="text/javascript">setTimeout(function() { window.location.reload(); }, 5000);</script>
+#end
+<div class="main">
+  <div class="title"><h2>全量同步任务</h2></div>
+  <div class="crumbs"><a href="channelList.htm?channelId=$task.channelId">返回 Channel</a></div>
+  <div class="setting_box">
+    <table cellpadding="0" cellspacing="0" class="setting">
+      <tr><th>任务序号：</th><td>$!task.id</td></tr>
+      <tr><th>Channel：</th><td>$!task.channelId</td></tr>
+      <tr><th>状态：</th><td>$!task.status</td></tr>
+      <tr><th>阶段：</th><td>$!task.stage</td></tr>
+      <tr><th>导入进度：</th><td>$!task.copiedRows / $!task.totalRows</td></tr>
+      <tr><th>详情：</th><td>$!task.message</td></tr>
+      <tr><th>创建时间：</th><td>$!task.gmtCreate</td></tr>
+      <tr><th>更新时间：</th><td>$!task.gmtModified</td></tr>
+      #if($task.status == "FAILED" && $task.stage == "START_CHANNEL")
+      #set ($retryURL = $homeModule.setAction("fullSyncAction").addQueryData("taskId", $task.id).addQueryData("eventSubmitDoRetryStart", "true").render())
+      <tr><th>操作：</th><td><a href="javascript:if(confirm('确定重新启动 Channel 吗?'))location='$retryURL'">重新启动 Channel</a></td></tr>
+      #end
+    </table>
+  </div>
+</div>

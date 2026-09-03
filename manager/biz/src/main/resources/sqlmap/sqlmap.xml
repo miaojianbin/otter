@@ -23,6 +23,7 @@
 	<sqlMap resource="sqlmap/sqlmap-mapping-node.xml" />
 	<sqlMap resource="sqlmap/sqlmap-mapping-canal.xml" />
 	<sqlMap resource="sqlmap/sqlmap-mapping-logrecord.xml" />
+	<sqlMap resource="sqlmap/sqlmap-mapping-fullsynctask.xml" />
 	<sqlMap resource="sqlmap/sqlmap-mapping-pipelinenoderelation.xml" />
 	<sqlMap resource="sqlmap/sqlmap-mapping-delayStat.xml" />
 	<sqlMap resource="sqlmap/sqlmap-mapping-tableStat.xml" />

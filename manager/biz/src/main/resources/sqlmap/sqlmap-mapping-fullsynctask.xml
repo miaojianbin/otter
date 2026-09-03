@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE sqlMap PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN" "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="com.alibaba.otter.manager.biz.fullsync.dal.dataobject.FullSyncTaskDO">
+  <typeAlias alias="fullSyncTask" type="com.alibaba.otter.manager.biz.fullsync.dal.dataobject.FullSyncTaskDO" />
+  <resultMap id="fullSyncTaskResult" class="fullSyncTask">
+    <result property="id" column="ID" /><result property="channelId" column="CHANNEL_ID" />
+    <result property="status" column="STATUS" /><result property="stage" column="STAGE" />
+    <result property="totalRows" column="TOTAL_ROWS" /><result property="copiedRows" column="COPIED_ROWS" />
+    <result property="message" column="MESSAGE" /><result property="gmtCreate" column="GMT_CREATE" />
+    <result property="gmtModified" column="GMT_MODIFIED" />
+  </resultMap>
+  <sql id="columns">ID,CHANNEL_ID,STATUS,STAGE,TOTAL_ROWS,COPIED_ROWS,MESSAGE,GMT_CREATE,GMT_MODIFIED</sql>
+  <insert id="insertFullSyncTask" parameterClass="fullSyncTask">
+    insert into FULL_SYNC_TASK (CHANNEL_ID,STATUS,STAGE,TOTAL_ROWS,COPIED_ROWS,MESSAGE,GMT_CREATE,GMT_MODIFIED)
+    values (#channelId#,#status#,#stage#,#totalRows#,#copiedRows#,#message#,now(),now())
+    <selectKey keyProperty="id" resultClass="long">select last_insert_id()</selectKey>
+  </insert>
+  <select id="findFullSyncTaskById" parameterClass="long" resultMap="fullSyncTaskResult">select <include refid="columns" /> from FULL_SYNC_TASK where ID=#value#</select>
+  <select id="findActiveFullSyncTaskByChannelId" parameterClass="long" resultMap="fullSyncTaskResult">select <include refid="columns" /> from FULL_SYNC_TASK where CHANNEL_ID=#value# and STATUS='RUNNING' order by ID desc limit 1</select>
+  <update id="updateFullSyncTask" parameterClass="fullSyncTask">update FULL_SYNC_TASK set STATUS=#status#,STAGE=#stage#,TOTAL_ROWS=#totalRows#,COPIED_ROWS=#copiedRows#,MESSAGE=#message#,GMT_MODIFIED=now() where ID=#id#</update>
+  <update id="failRunningFullSyncTasks" parameterClass="string">update FULL_SYNC_TASK set STATUS='FAILED',MESSAGE=#value#,GMT_MODIFIED=now() where STATUS='RUNNING'</update>
+</sqlMap>

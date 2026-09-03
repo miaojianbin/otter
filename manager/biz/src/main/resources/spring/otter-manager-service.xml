@@ -154,6 +154,16 @@
 			<ref bean="logRecordDao" />
 		</property>
 	</bean>
+
+	<bean id="fullSyncService" class="com.alibaba.otter.manager.biz.fullsync.impl.FullSyncServiceImpl">
+		<property name="fullSyncTaskDao" ref="fullSyncTaskDao" />
+		<property name="channelService" ref="channelService" />
+		<property name="pipelineService" ref="pipelineService" />
+		<property name="dataMediaPairService" ref="dataMediaPairService" />
+		<property name="canalService" ref="canalService" />
+		<property name="arbitrateManageService" ref="arbitrateManageService" />
+		<property name="dataSourceCreator" ref="dataSourceCreator" />
+	</bean>
 	
 	<bean id="alarmRuleService"
 		class="com.alibaba.otter.manager.biz.config.alarm.impl.AlarmRuleServiceImpl">
