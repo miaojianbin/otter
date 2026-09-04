@@ -27,6 +27,7 @@ import com.alibaba.citrus.turbine.Context;
 import com.alibaba.citrus.turbine.dataresolver.Param;
 import com.alibaba.citrus.util.Paginator;
 import com.alibaba.otter.manager.biz.config.channel.ChannelService;
+import com.alibaba.otter.manager.biz.fullsync.FullSyncService;
 import com.alibaba.otter.manager.biz.statistics.stage.ProcessStatService;
 import com.alibaba.otter.manager.web.common.model.SeniorChannel;
 import com.alibaba.otter.shared.arbitrate.ArbitrateManageService;
@@ -44,6 +45,9 @@ public class ChannelList {
 
     @Resource(name = "arbitrateManageService")
     private ArbitrateManageService arbitrateManageService;
+
+    @Resource(name = "fullSyncService")
+    private FullSyncService        fullSyncService;
 
     public void execute(@Param("pageIndex") int pageIndex, @Param("searchKey") String searchKey,
                         @Param("channelStatus") String status, @Param("channelId") Long channelId,
@@ -112,5 +116,6 @@ public class ChannelList {
         context.put("paginator", paginator);
         context.put("searchKey", searchKey);
         context.put("errorType", errorType);
+        context.put("fullSyncAvailable", fullSyncService.isAvailable());
     }
 }

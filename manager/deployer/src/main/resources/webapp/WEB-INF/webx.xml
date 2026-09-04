@@ -189,6 +189,7 @@
 						/.*system_reduction\.htm
 						/.*system_parameter\.htm
 						/.*systemParameter\.htm
+						/.*fullSyncInfo\.htm
 					</beans:value>
 				</beans:property>
 				<beans:property name="actionProtected">
@@ -202,6 +203,9 @@
 						DataMatrixAction|switch
 						SwitchWarmupAction|switch
 						SwitchWarmupAction|restart
+						FullSyncAction|create
+						FullSyncAction|retryStart
+						FullSyncAction|retry_start
 					</beans:value>
 				</beans:property>
 			</beans:bean>

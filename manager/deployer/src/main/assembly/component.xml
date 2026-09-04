@@ -15,6 +15,14 @@
 				<include>**/*</include>
 			</includes>
 		</fileSet>
+		<fileSet>
+			<directory>./src/main/resources/sql</directory>
+			<outputDirectory>conf/sql</outputDirectory>
+			<includes>
+				<include>**/*.sql</include>
+			</includes>
+			<fileMode>0644</fileMode>
+		</fileSet>
 	</fileSets>
 	<files>
 		<file>

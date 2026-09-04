@@ -50,4 +50,6 @@ public interface ChannelService extends GenericService<Channel> {
 
     public void startChannel(Long channelId);
 
+    public void startChannelByFullSync(Long channelId);
+
 }

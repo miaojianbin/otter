@@ -27,4 +27,6 @@ import com.alibaba.otter.manager.biz.config.channel.dal.dataobject.ChannelDO;
 public interface ChannelDAO extends GenericDAO<ChannelDO> {
 
     public List<ChannelDO> listChannelPks();
+
+    public ChannelDO findByIdForUpdate(Long identity);
 }

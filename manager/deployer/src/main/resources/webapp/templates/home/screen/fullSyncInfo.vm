@@ -16,8 +16,15 @@ $control.setTemplate("home:navigation.vm")
       <tr><th>创建时间：</th><td>$!task.gmtCreate</td></tr>
       <tr><th>更新时间：</th><td>$!task.gmtModified</td></tr>
       #if($task.status == "FAILED" && $task.stage == "START_CHANNEL")
-      #set ($retryURL = $homeModule.setAction("fullSyncAction").addQueryData("taskId", $task.id).addQueryData("eventSubmitDoRetryStart", "true").render())
-      <tr><th>操作：</th><td><a href="javascript:if(confirm('确定重新启动 Channel 吗?'))location='$retryURL'">重新启动 Channel</a></td></tr>
+      <tr><th>操作：</th><td>
+        <form id="retryFullSyncForm" method="post" style="display:inline">
+          $csrfToken.hiddenField
+          <input type="hidden" name="action" value="full_sync_action" />
+          <input type="hidden" name="event_submit_do_retry_start" value="1" />
+          <input type="hidden" name="taskId" value="$task.id" />
+          <a href="javascript:if(confirm('确定重新启动 Channel 吗?'))document.getElementById('retryFullSyncForm').submit();">重新启动 Channel</a>
+        </form>
+      </td></tr>
       #end
     </table>
   </div>

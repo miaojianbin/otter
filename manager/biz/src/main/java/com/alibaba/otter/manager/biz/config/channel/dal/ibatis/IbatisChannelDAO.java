@@ -90,4 +90,9 @@ public class IbatisChannelDAO extends SqlMapClientDaoSupport implements ChannelD
         return (ChannelDO) getSqlMapClientTemplate().queryForObject("findChannelById", identity);
     }
 
+    public ChannelDO findByIdForUpdate(Long identity) {
+        Assert.assertNotNull(identity);
+        return (ChannelDO) getSqlMapClientTemplate().queryForObject("findChannelByIdForUpdate", identity);
+    }
+
 }

@@ -5,7 +5,7 @@ public class InvalidConfigureException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public static enum INVALID_TYPE {
-        DDL, HOME
+        DDL, HOME, FULL_SYNC
     }
 
     private INVALID_TYPE type;

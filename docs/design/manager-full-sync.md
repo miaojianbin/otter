@@ -21,8 +21,8 @@
 - Channel 状态为 `STOP` 时可点击。
 - Channel 为 `START`、`PAUSE` 或正在执行全量同步时不可点击。
 - 仅管理员可以执行。
-- 点击后弹出删除并重建目标表的确认框。
-- 用户确认后创建后台任务并进入任务详情页，避免长时间占用 Web 请求线程。
+- 点击后明确提示重置位点和覆盖目标数据的风险，用户必须准确输入“确认”。
+- 页面和服务端均校验确认口令，通过后创建后台任务并进入任务详情页。
 
 全量任务执行期间保持 Channel 为 `STOP`。如果执行失败，Channel 继续保持 `STOP`；只有全部数据导入成功后才启动 Channel。
 
@@ -37,7 +37,7 @@
         ↓
 按目标表分组
         ↓
-每个目标表只删除、创建一次
+每个目标表只创建一张任务临时表
         ↓
 依次导入该目标表对应的所有源表数据
         ↓
@@ -51,13 +51,14 @@
 Manager 执行以下检查：
 
 1. Channel 存在且当前状态为 `STOP`。
-2. 同一 Channel 没有其他正在运行的全量任务。
-3. Channel 下至少存在一个 Pipeline 和一个 DataMediaPair。
+2. Channel 只有一个单向 Pipeline，双向、链式和源目标同表配置不支持。
+3. 同一 Channel 没有其他正在运行的全量任务。
 4. 源端和目标端均为 MySQL 数据源。
 5. 源表存在且 Manager 可以读取。
-6. Manager 可以在目标库执行 `DROP TABLE`、`CREATE TABLE`、`INSERT` 和 `UPDATE`。
+6. Canal 使用单 MySQL 地址、`ZOOKEEPER/MIXED` meta 和 `META/MEMORY_META_FAILBACK` index。
+7. Manager 可以在目标库执行 `DROP TABLE`、`CREATE TABLE`、`INSERT` 和 `RENAME TABLE`。
 
-检查失败时不修改游标、不删除目标表，也不启动 Channel。
+检查失败时不修改游标、不切换目标表，也不启动 Channel。
 
 ### 3.2 写入当前位点游标
 
@@ -66,11 +67,12 @@ Manager 根据 Pipeline 的 Canal destination 和 clientId 处理游标：
 1. 读取 Canal 配置中的源 MySQL 地址和账号。
 2. 查询源库当前 binlog 文件、偏移、GTID 和 serverId。
 3. 构造 Canal 使用的 `LogPosition`。
-4. 将新 `LogPosition` 写入 ZooKeeper 中的客户端 cursor。
+4. 清理该客户端全部未确认的 `batch_mark`。
+5. 将新 `LogPosition` 写入 ZooKeeper 中的客户端 cursor，并回读校验。
 
 同一 destination 被本 Channel 的多个 Pipeline 使用时，必须为这些 clientId 写入同一个当前位点，避免 Canal 从其他旧 cursor 重新选择已经失效的较早位点。如果该 destination 还被其他 Channel 使用，首期直接阻止执行，避免修改其他 Channel 的游标。
 
-新位点必须在删除目标表和读取任何全量数据之前写入。全量期间源库产生的新变化将在 Channel 启动后从该位点重新播放。
+新位点必须在创建临时表和读取任何全量数据之前写入。全量期间源库产生的新变化将在 Channel 启动后从该位点重新播放。
 
 ### 3.3 收集并分组表映射
 
@@ -88,7 +90,7 @@ source_db.order_02 ─┼─> target_db.order
 source_db.order_03 ─┘
 ```
 
-目标表的删除和创建以目标表分组为单位执行，而不是以 DataMediaPair 为单位执行。
+目标表的临时表创建和最终切换以目标表分组为单位执行，而不是以 DataMediaPair 为单位执行。
 
 ### 3.4 重建目标表
 
@@ -98,12 +100,12 @@ source_db.order_03 ─┘
 2. 选择 ID 最小的 DataMediaPair 对应源表作为建表模板。业务语义上可以使用任意源表，固定选择规则只是为了保证每次执行结果一致。
 3. 执行 `SHOW CREATE TABLE source_schema.source_table` 获取源表结构。
 4. 将 DDL 中的源 schema 和表名替换为目标 schema 和表名。
-5. 执行 `DROP TABLE IF EXISTS target_schema.target_table`。
-6. 执行改写后的 `CREATE TABLE`。
+5. 创建任务专属临时表，不直接删除正式目标表。
+6. 全量数据完整写入临时表后，使用 `RENAME TABLE` 将旧表备份并切换临时表。
 
 无论有多少个源表映射到同一个目标表，步骤 5 和步骤 6 都只执行一次。
 
-如果同组源表中将导入的字段不在建表模板中，Manager 在删除目标表前终止任务，不执行目标表删除。
+如果同组源表中将导入的字段或字段定义与建表模板不兼容，Manager 在写入位点和切换目标表前终止任务。
 
 首期仅改写 DDL 中的 schema 和表名，不自动转换数据库类型，也不处理自定义建表脚本。
 
@@ -146,7 +148,7 @@ source_db.order_03 ─┘
 
 1. 以目标数据源、schema 和 table 作为唯一目标表标识。
 2. 每个目标表只选择一个源表生成 DDL。
-3. 每个目标表只执行一次 DROP 和 CREATE。
+3. 每个目标表只创建一张临时表，导入完成后只切换一次。
 4. 同组所有源表数据依次追加或 upsert 到该目标表。
 5. 不并行导入同一目标表，避免重复主键竞争和不可预测的覆盖顺序。
 6. 不同目标表首期也按顺序执行，保持实现简单。
@@ -155,11 +157,11 @@ source_db.order_03 ─┘
 例如三个源表映射到一个目标表时，执行顺序为：
 
 ```text
-DROP target.order
-CREATE target.order            # 仅一次
+创建 target.order 的任务临时表       # 仅一次
 导入 source.order_01
 导入 source.order_02
 导入 source.order_03
+原子切换临时表为 target.order       # 仅一次
 START Channel
 ```
 
@@ -187,13 +189,13 @@ Manager 重启后，不自动从中间批次续传。未完成任务标记为 `F
 
 - 写入游标失败：立即停止，不操作目标表。
 - 源表结构检查失败：立即停止，不操作目标表。
-- 删除或创建目标表失败：任务失败，Channel 保持 `STOP`。
+- 创建临时表或切换目标表失败：任务失败，Channel 保持 `STOP`。
 - 数据导入失败：任务失败，Channel 保持 `STOP`。
 - 任意目标表失败：不再处理后续目标表。
 - 只有所有目标表数据导入成功后才启动 Channel。
 - Channel 启动失败不重复全量，只允许重新启动 Channel。
 
-由于目标表会被删除，失败时可能存在部分目标表已完成、部分目标表未完成的情况。重新执行任务时会再次写入新的当前游标，并从第一个目标表开始重新删除、建表和导入。
+导入阶段失败时清理临时表，正式目标表保持不变。多目标表切换失败时按相反顺序恢复已经切换的表；Channel 启动失败时保留新表和备份表，只允许重试启动。
 
 ## 7. 代码改动位置
 
@@ -204,6 +206,7 @@ Manager 重启后，不自动从中间批次续传。未完成任务标记为 `F
 - 修改 `channelList.vm` 增加按钮和状态控制。
 - 增加 `FullSyncAction` 接收创建任务和重新启动 Channel 请求。
 - 增加简单任务详情页面。
+- 全量操作使用管理员权限、POST 和现有 CSRF 校验。
 
 ### Manager Biz
 
@@ -217,15 +220,16 @@ Manager 重启后，不自动从中间批次续传。未完成任务标记为 `F
 
 - 增加一张 `FULL_SYNC_TASK` 表保存状态、进度和错误。
 - 更新全新安装 SQL，并提供独立升级 SQL。
+- 发布包在 `conf/sql` 中包含升级 SQL；缺少任务表时禁用全量入口，不影响 Manager 其他功能启动。
 
 Node 模块、Node 配置和 Node 部署包不需要修改。
 
 ## 8. 测试要点
 
-1. Channel 为 STOP 时按钮可用，其他状态不可用。
+1. Channel 为 STOP 时按钮可用，其他状态不可用；必须输入“确认”才能提交。
 2. 游标被重写为源 MySQL 当前 binlog/GTID 位点。
-3. 单源表到单目标表可以完成 DROP、CREATE 和全量导入。
-4. 多个源表到同一目标表时，目标表只 DROP 和 CREATE 一次。
+3. 单源表到单目标表可以完成临时表创建、全量导入和原子切换。
+4. 多个源表到同一目标表时，目标表只创建和切换一次。
 5. 多源表数据全部进入同一目标表。
 6. 多个不同目标表分别只重建一次。
 7. 全量期间持续写入源库，Channel 启动并追平后数据一致。

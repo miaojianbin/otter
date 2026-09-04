@@ -53,6 +53,13 @@
 		<include refid="allChannelColumns" />
 		from CHANNEL where ID = #value#
 	</select>
+
+	<select id="findChannelByIdForUpdate" resultMap="channelResult"
+		parameterClass="long">
+		select
+		<include refid="allChannelColumns" />
+		from CHANNEL where ID = #value# for update
+	</select>
 	
 	<select id="getChannelCount" resultClass="Integer">
 		select count(*) from CHANNEL 
@@ -130,4 +137,4 @@
     	delete from CHANNEL where ID = #value#
     </delete>
 
-</sqlMap>  
+</sqlMap>

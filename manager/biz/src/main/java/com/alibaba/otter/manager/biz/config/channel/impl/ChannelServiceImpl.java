@@ -36,6 +36,7 @@ import com.alibaba.otter.manager.biz.config.channel.dal.ChannelDAO;
 import com.alibaba.otter.manager.biz.config.channel.dal.dataobject.ChannelDO;
 import com.alibaba.otter.manager.biz.config.parameter.SystemParameterService;
 import com.alibaba.otter.manager.biz.config.pipeline.PipelineService;
+import com.alibaba.otter.manager.biz.fullsync.dal.FullSyncTaskDAO;
 import com.alibaba.otter.manager.biz.remote.ConfigRemoteService;
 import com.alibaba.otter.shared.arbitrate.ArbitrateManageService;
 import com.alibaba.otter.shared.common.model.config.channel.Channel;
@@ -61,6 +62,7 @@ public class ChannelServiceImpl implements ChannelService {
     private ConfigRemoteService    configRemoteService;
     private PipelineService        pipelineService;
     private ChannelDAO             channelDao;
+    private FullSyncTaskDAO        fullSyncTaskDao;
 
     /**
      * 添加Channel
@@ -374,13 +376,14 @@ public class ChannelServiceImpl implements ChannelService {
      *      4.调用远程方法，推送Channel到node节点
      * </pre>
      */
-    private void switchChannelStatus(final Long channelId, final ChannelStatus channelStatus) {
+    private void switchChannelStatus(final Long channelId, final ChannelStatus channelStatus,
+                                     final boolean fullSyncStart) {
         transactionTemplate.execute(new TransactionCallbackWithoutResult() {
 
             @Override
             protected void doInTransactionWithoutResult(TransactionStatus status) {
                 try {
-                    final ChannelDO channelDo = channelDao.findById(channelId);
+                    final ChannelDO channelDo = channelDao.findByIdForUpdate(channelId);
 
                     if (null == channelDo) {
                         String exceptionCause = "query channelId:" + channelId + " return null.";
@@ -389,6 +392,10 @@ public class ChannelServiceImpl implements ChannelService {
                     }
 
                     ChannelStatus oldStatus = arbitrateManageService.channelEvent().status(channelDo.getId());
+                    if (!fullSyncStart && channelStatus != null && channelStatus.isStart()
+                        && isFullSyncRunning(channelId)) {
+                        throw new InvalidConfigureException(INVALID_TYPE.FULL_SYNC);
+                    }
                     Channel channel = doToModel(channelDo);
                     // 检查下ddl/home配置
                     List<Pipeline> pipelines = channel.getPipelines();
@@ -455,15 +462,29 @@ public class ChannelServiceImpl implements ChannelService {
     }
 
     public void stopChannel(Long channelId) {
-        switchChannelStatus(channelId, ChannelStatus.STOP);
+        switchChannelStatus(channelId, ChannelStatus.STOP, false);
     }
 
     public void startChannel(Long channelId) {
-        switchChannelStatus(channelId, ChannelStatus.START);
+        switchChannelStatus(channelId, ChannelStatus.START, false);
+    }
+
+    public void startChannelByFullSync(Long channelId) {
+        switchChannelStatus(channelId, ChannelStatus.START, true);
     }
 
     public void notifyChannel(Long channelId) {
-        switchChannelStatus(channelId, null);
+        switchChannelStatus(channelId, null, false);
+    }
+
+    private boolean isFullSyncRunning(Long channelId) {
+        if (fullSyncTaskDao == null) return false;
+        try {
+            return fullSyncTaskDao.findActiveByChannelId(channelId) != null;
+        } catch (RuntimeException e) {
+            logger.warn("WARN ## unable to query FULL_SYNC_TASK; normal channel start remains available", e);
+            return false;
+        }
     }
 
     /*----------------------DO <-> MODEL 组装方法--------------------------*/
@@ -691,6 +712,10 @@ public class ChannelServiceImpl implements ChannelService {
 
     public void setChannelDao(ChannelDAO channelDao) {
         this.channelDao = channelDao;
+    }
+
+    public void setFullSyncTaskDao(FullSyncTaskDAO fullSyncTaskDao) {
+        this.fullSyncTaskDao = fullSyncTaskDao;
     }
 
     public void setArbitrateManageService(ArbitrateManageService arbitrateManageService) {

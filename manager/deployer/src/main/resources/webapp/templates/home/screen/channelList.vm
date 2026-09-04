@@ -6,6 +6,21 @@ $control.setTemplate("home:navigation.vm")
 <script language="javascript">
 <!--
 	changeNav("sync");
+
+    function submitFullSync(formId) {
+        var risk = "全量同步将重置 Canal 位点，并在全量导入完成后重建和切换目标表。错误的映射配置可能导致目标数据被覆盖；执行期间 Channel 将保持停止。请确认已核对映射并完成必要备份。是否继续？";
+        if (!window.confirm(risk)) return false;
+        var confirmation = window.prompt("这是破坏性操作。请输入“确认”后提交：", "");
+        if (confirmation !== "确认") {
+            if (confirmation !== null) window.alert("输入内容不正确，未提交全量同步任务。");
+            return false;
+        }
+        var form = document.getElementById(formId);
+        form.elements.confirmation.value = confirmation;
+        form.submit();
+        return false;
+    }
+
     $(function () {
         $('.bubbleInfo').each(function () {
             var distance = 10;
@@ -134,9 +149,16 @@ $control.setTemplate("home:navigation.vm")
 								<span class="ico_line">|</span><a href="javascript:if(confirm('确实推送Channel吗?'))location='$notifyURL'"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">推送</span></a>
 							#end
 							#if($channel.status.isStop() || $channel.status.isPause())
-								#if($channel.status.isStop())
-									#set ($fullSyncURL = $homeModule.setAction("fullSyncAction").addQueryData("channelId", $channel.id).addQueryData("eventSubmitDoCreate", "true").render())
-									<span class="ico_line">|</span><a href="javascript:if(confirm('全量同步会删除并重建目标表，确定继续吗?'))location='$fullSyncURL'"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">全量同步</span></a>
+								#if($channel.status.isStop() && $fullSyncAvailable)
+									<span class="ico_line">|</span>
+									<form id="fullSyncForm$channel.id" method="post" style="display:inline">
+										$csrfToken.hiddenField
+										<input type="hidden" name="action" value="full_sync_action" />
+										<input type="hidden" name="event_submit_do_create" value="1" />
+										<input type="hidden" name="channelId" value="$channel.id" />
+										<input type="hidden" name="confirmation" value="" />
+										<a href="#" onclick="return submitFullSync('fullSyncForm$channel.id');"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">全量同步</span></a>
+									</form>
 								#end
 								#set($flag_go = false)
 								#set($flag_back = false)
@@ -318,5 +340,7 @@ $control.setTemplate("home:navigation.vm")
 	alert("一个channel中只允许开启单向ddl同步!");
 #elseif($!errorType == "HOME")
 	alert("一个channel中只允许单向开启为主站点!");
+#elseif($!errorType == "FULL_SYNC")
+	alert("Channel正在执行全量同步，完成前不能启动!");
 #end
 </script>

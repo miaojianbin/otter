@@ -18,6 +18,9 @@
 		<property name="channelDao">
 			<ref bean="channelDao" />
 		</property>
+		<property name="fullSyncTaskDao">
+			<ref bean="fullSyncTaskDao" />
+		</property>
 		<property name="transactionTemplate">
 			<ref bean="transactionTemplate" />
 		</property>
@@ -157,12 +160,14 @@
 
 	<bean id="fullSyncService" class="com.alibaba.otter.manager.biz.fullsync.impl.FullSyncServiceImpl">
 		<property name="fullSyncTaskDao" ref="fullSyncTaskDao" />
+		<property name="channelDao" ref="channelDao" />
 		<property name="channelService" ref="channelService" />
 		<property name="pipelineService" ref="pipelineService" />
 		<property name="dataMediaPairService" ref="dataMediaPairService" />
 		<property name="canalService" ref="canalService" />
 		<property name="arbitrateManageService" ref="arbitrateManageService" />
 		<property name="dataSourceCreator" ref="dataSourceCreator" />
+		<property name="transactionTemplate" ref="transactionTemplate" />
 	</bean>
 	
 	<bean id="alarmRuleService"
