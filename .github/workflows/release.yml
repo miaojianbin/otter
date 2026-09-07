@@ -36,6 +36,9 @@ jobs:
       - name: Run full sync web confirmation tests
         run: mvn -B -Dmaven.test.skip=false -Dmaven.javadoc.skip=true -Dtest=FullSyncActionTest -DfailIfNoTests=false -pl manager/web -am test
 
+      - name: Run reverse proxy redirect tests
+        run: mvn -B -Dmaven.test.skip=false -Dmaven.javadoc.skip=true -Dtest=RelativeRedirectConfigTest -DfailIfNoTests=false -pl manager/deployer -am test
+
   build-release:
     needs: test
     runs-on: ubuntu-latest
