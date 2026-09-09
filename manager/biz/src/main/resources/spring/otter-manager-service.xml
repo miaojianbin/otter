@@ -165,6 +165,7 @@
 		<property name="pipelineService" ref="pipelineService" />
 		<property name="dataMediaPairService" ref="dataMediaPairService" />
 		<property name="canalService" ref="canalService" />
+		<property name="dataMatrixService" ref="dataMatrixService" />
 		<property name="arbitrateManageService" ref="arbitrateManageService" />
 		<property name="dataSourceCreator" ref="dataSourceCreator" />
 		<property name="transactionTemplate" ref="transactionTemplate" />

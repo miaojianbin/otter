@@ -50,6 +50,7 @@ import com.alibaba.otter.manager.biz.config.canal.CanalService;
 import com.alibaba.otter.manager.biz.config.channel.ChannelService;
 import com.alibaba.otter.manager.biz.config.channel.dal.ChannelDAO;
 import com.alibaba.otter.manager.biz.config.channel.dal.dataobject.ChannelDO;
+import com.alibaba.otter.manager.biz.config.datamatrix.DataMatrixService;
 import com.alibaba.otter.manager.biz.config.datamediapair.DataMediaPairService;
 import com.alibaba.otter.manager.biz.config.pipeline.PipelineService;
 import com.alibaba.otter.manager.biz.fullsync.FullSyncService;
@@ -62,6 +63,7 @@ import com.alibaba.otter.shared.common.model.config.data.ColumnPair;
 import com.alibaba.otter.shared.common.model.config.data.DataMedia;
 import com.alibaba.otter.shared.common.model.config.data.DataMediaPair;
 import com.alibaba.otter.shared.common.model.config.data.DataMediaSource;
+import com.alibaba.otter.shared.common.model.config.data.DataMatrix;
 import com.alibaba.otter.shared.common.model.config.data.db.DbMediaSource;
 import com.alibaba.otter.shared.common.model.config.pipeline.Pipeline;
 import com.alibaba.otter.shared.common.utils.zookeeper.ZkClientx;
@@ -80,6 +82,7 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
     private PipelineService pipelineService;
     private DataMediaPairService dataMediaPairService;
     private CanalService canalService;
+    private DataMatrixService dataMatrixService;
     private ArbitrateManageService arbitrateManageService;
     private DataSourceCreator dataSourceCreator;
     private TransactionTemplate transactionTemplate;
@@ -255,9 +258,6 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
             if (parameter.getSourcingType() == null || !parameter.getSourcingType().isMysql()) {
                 throw new IllegalStateException("full sync supports a direct MySQL Canal source only");
             }
-            if (parameter.getHaMode() != null && parameter.getHaMode().isMedia()) {
-                throw new IllegalStateException("full sync does not support Canal media HA");
-            }
             if (parameter.getMetaMode() == null
                 || (!parameter.getMetaMode().isZookeeper() && !parameter.getMetaMode().isMixed())) {
                 throw new IllegalStateException("full sync requires Canal meta mode ZOOKEEPER or MIXED");
@@ -266,10 +266,13 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                 || (!parameter.getIndexMode().isMeta() && !parameter.getIndexMode().isMemoryMetaFailback())) {
                 throw new IllegalStateException("full sync requires Canal index mode META or MEMORY_META_FAILBACK");
             }
-            if (parameter.getGroupDbAddresses().size() != 1
-                || parameter.getGroupDbAddresses().get(0).size() != 1
-                || parameter.getGroupDbAddresses().get(0).get(0).getType() == null
-                || !parameter.getGroupDbAddresses().get(0).get(0).getType().isMysql()) {
+            if (parameter.getHaMode() != null && parameter.getHaMode().isMedia()) {
+                resolveCanalAddress(parameter);
+            } else if (parameter.getGroupDbAddresses() == null || parameter.getGroupDbAddresses().size() != 1
+                       || parameter.getGroupDbAddresses().get(0) == null
+                       || parameter.getGroupDbAddresses().get(0).size() != 1
+                       || parameter.getGroupDbAddresses().get(0).get(0).getType() == null
+                       || !parameter.getGroupDbAddresses().get(0).get(0).getType().isMysql()) {
                 throw new IllegalStateException("full sync supports one Canal MySQL address only");
             }
         }
@@ -538,6 +541,12 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         for (Pipeline pipeline : pipelines) {
             String destination = pipeline.getParameters().getDestinationName();
             short clientId = pipeline.getParameters().getMainstemClientId();
+            LogPosition expected = positions.get(clientKey(destination, clientId));
+            InetSocketAddress currentAddress = resolveCanalAddress(
+                canalService.findByName(destination).getCanalParameter());
+            if (!currentAddress.equals(expected.getIdentity().getSourceAddress())) {
+                throw new IllegalStateException("Canal source changed while full sync was running");
+            }
             String batchPath = ZookeeperPathUtils.getBatchMarkPath(destination, clientId);
             if (!zookeeper.exists(batchPath) || zookeeper.countChildren(batchPath) != 0) {
                 throw new IllegalStateException("Canal created a new unacknowledged batch while full sync was running");
@@ -545,7 +554,7 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
             String cursorPath = ZookeeperPathUtils.getCursorPath(destination, clientId);
             byte[] data = zookeeper.readData(cursorPath, true);
             LogPosition actual = data == null ? null : JsonUtils.unmarshalFromByte(data, LogPosition.class);
-            if (!positions.get(clientKey(destination, clientId)).equals(actual)) {
+            if (!expected.equals(actual)) {
                 throw new IllegalStateException("Canal cursor changed while full sync was running");
             }
         }
@@ -557,7 +566,7 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
 
     private LogPosition readCurrentPosition(String destination, Long pipelineId) throws Exception {
         CanalParameter parameter = canalService.findByName(destination).getCanalParameter();
-        InetSocketAddress address = parameter.getGroupDbAddresses().get(0).get(0).getDbAddress();
+        InetSocketAddress address = resolveCanalAddress(parameter);
         Connection connection = DriverManager.getConnection("jdbc:mysql://" + address.getHostName() + ":" + address.getPort(),
             parameter.getDbUsername(), parameter.getDbPassword());
         try {
@@ -579,6 +588,17 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         } finally {
             connection.close();
         }
+    }
+
+    private InetSocketAddress resolveCanalAddress(CanalParameter parameter) {
+        if (parameter.getHaMode() != null && parameter.getHaMode().isMedia()) {
+            if (StringUtils.isBlank(parameter.getMediaGroup())) {
+                throw new IllegalStateException("Canal media HA group is missing");
+            }
+            DataMatrix matrix = dataMatrixService.findByGroupKey(parameter.getMediaGroup());
+            return FullSyncSafety.requireSingleMediaMaster(matrix.getMaster(), matrix.getSlave());
+        }
+        return parameter.getGroupDbAddresses().get(0).get(0).getDbAddress();
     }
 
     private Long readServerId(Statement statement) throws SQLException {
@@ -1022,6 +1042,10 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
 
     public void setCanalService(CanalService value) {
         this.canalService = value;
+    }
+
+    public void setDataMatrixService(DataMatrixService value) {
+        this.dataMatrixService = value;
     }
 
     public void setArbitrateManageService(ArbitrateManageService value) {

@@ -5,6 +5,7 @@
  */
 package com.alibaba.otter.manager.biz.fullsync.impl;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -58,5 +59,32 @@ public class FullSyncSafetyTest {
     public void createsShortTaskScopedTemporaryNames() {
         Assert.assertEquals("__otter_fs_42_3", FullSyncSafety.temporaryTableName("__otter_fs_", 42L, 3));
         Assert.assertTrue(FullSyncSafety.temporaryTableName("__otter_bak_", Long.MAX_VALUE, 999).length() <= 64);
+    }
+
+    @Test
+    public void acceptsMediaHaWithOnlyAMaster() {
+        InetSocketAddress address = FullSyncSafety.requireSingleMediaMaster("127.0.0.1:3306", " ");
+        Assert.assertEquals(address.getAddress().getHostAddress(), "127.0.0.1");
+        Assert.assertEquals(address.getPort(), 3306);
+    }
+
+    @Test
+    public void rejectsMediaHaWithAStandby() {
+        try {
+            FullSyncSafety.requireSingleMediaMaster("127.0.0.1:3306", "127.0.0.2:3306");
+            Assert.fail("media HA with a standby must be rejected");
+        } catch (IllegalStateException expected) {
+            Assert.assertTrue(expected.getMessage().contains("standby"));
+        }
+    }
+
+    @Test
+    public void rejectsInvalidMediaHaMasterAddress() {
+        try {
+            FullSyncSafety.requireSingleMediaMaster("127.0.0.1", null);
+            Assert.fail("an invalid media HA master must be rejected");
+        } catch (IllegalStateException expected) {
+            Assert.assertTrue(expected.getMessage().contains("master address"));
+        }
     }
 }

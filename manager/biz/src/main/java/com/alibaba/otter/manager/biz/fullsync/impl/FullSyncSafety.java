@@ -5,6 +5,7 @@
  */
 package com.alibaba.otter.manager.biz.fullsync.impl;
 
+import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -39,5 +40,28 @@ final class FullSyncSafety {
 
     static String temporaryTableName(String prefix, Long taskId, int index) {
         return prefix + taskId + "_" + index;
+    }
+
+    static InetSocketAddress requireSingleMediaMaster(String master, String slave) {
+        if (slave != null && slave.trim().length() > 0) {
+            throw new IllegalStateException("full sync does not support Canal media HA with a standby database");
+        }
+        if (master == null || master.trim().length() == 0) {
+            throw new IllegalStateException("Canal media HA master address is missing");
+        }
+        String value = master.trim();
+        int separator = value.lastIndexOf(':');
+        if (separator <= 0 || separator == value.length() - 1) {
+            throw new IllegalStateException("invalid Canal media HA master address: " + value);
+        }
+        String host = value.substring(0, separator).trim();
+        if (host.startsWith("[") && host.endsWith("]")) host = host.substring(1, host.length() - 1);
+        try {
+            int port = Integer.parseInt(value.substring(separator + 1).trim());
+            if (host.length() == 0 || port < 1 || port > 65535) throw new NumberFormatException();
+            return new InetSocketAddress(host, port);
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException("invalid Canal media HA master address: " + value);
+        }
     }
 }
