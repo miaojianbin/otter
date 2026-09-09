@@ -9,6 +9,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
@@ -31,6 +34,16 @@ import org.eclipse.jetty.xml.XmlConfiguration;
 import org.junit.Test;
 
 public class RelativeRedirectConfigTest {
+
+    @Test
+    public void channelListShowsFullSyncProgressAndLocksOperations() throws Exception {
+        String template = new String(Files.readAllBytes(
+            Paths.get("src/main/resources/webapp/templates/home/screen/channelList.vm")), StandardCharsets.UTF_8);
+        assertTrue(template.contains("#if($channel.fullSyncRunning)"));
+        assertTrue(template.contains("查看同步进度"));
+        assertTrue(template.contains("操作已锁定"));
+        assertTrue(template.contains("fullSyncInfo.vm"));
+    }
 
     @Test
     public void managerJettyPreservesExternalRedirectOrigin() throws Exception {

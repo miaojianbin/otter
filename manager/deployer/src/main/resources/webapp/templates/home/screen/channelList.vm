@@ -133,9 +133,10 @@ $control.setTemplate("home:navigation.vm")
 			#set ($pipelineURL = $homeModule.setTarget("pipelineList.vm").addQueryData("channelId", $channel.id))
 			<a href="$pipelineURL" id="download" class="trigger">$channel.name</a>
 	      </td>
-	      
-	      	<td>
-                #if($channel.status.isStart())  <a href="" style="color:green">运行</a>
+
+		<td>
+                #if($channel.fullSyncRunning) <a href="fullSyncInfo.htm?taskId=$channel.fullSyncTask.id" style="color:#e67e22">全量同步中</a>
+                #elseif($channel.status.isStart())  <a href="" style="color:green">运行</a>
                 #elseif($channel.status.isPause())  <a href="" style="color:red">挂起</a>
 				#else <a href="" style="color:gray">停止</a>
 				#end
@@ -149,9 +150,15 @@ $control.setTemplate("home:navigation.vm")
 	     
 		  
 		  <td style="white-space:nowrap;">
-        				#set ($channelInfoURL = $homeModule.setTarget("channelInfo.vm").addQueryData("channelId", $channel.id))
+						#set ($channelInfoURL = $homeModule.setTarget("channelInfo.vm").addQueryData("channelId", $channel.id))
 						<a href="$channelInfoURL"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">查看</span></a>
-						
+						#if($channel.fullSyncRunning)
+							#set ($fullSyncInfoURL = $homeModule.setTarget("fullSyncInfo.vm").addQueryData("taskId", $channel.fullSyncTask.id))
+							<span class="ico_line">|</span><a href="$fullSyncInfoURL"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">查看同步进度</span></a>
+							#if($user.authorizeType.isAdmin())
+								<span class="ico_line">|</span><span class="ico_font" style="color:#999" title="全量同步完成前不能执行Channel变更操作">操作已锁定</span>
+							#end
+						#else
 						#set ($notifyURL = $homeModule.setAction("channelAction").addQueryData("channelId", $channel.id).addQueryData("pageIndex", $paginator.page).addQueryData("searchKey", $!searchKey).addQueryData("eventSubmitDoNotify", "true").render())
     					#if($user.authorizeType.isAdmin())
 							#if($channel.status.isStart() || $channel.status.isPause())
@@ -292,6 +299,7 @@ $control.setTemplate("home:navigation.vm")
 								#end
 							#end
 						#end
+						#end
 		  </td>
 	    </tr>
 	#end
@@ -352,6 +360,6 @@ $control.setTemplate("home:navigation.vm")
 #elseif($!errorType == "HOME")
 	alert("一个channel中只允许单向开启为主站点!");
 #elseif($!errorType == "FULL_SYNC")
-	alert("Channel正在执行全量同步，完成前不能启动!");
+	alert("Channel正在执行全量同步，完成前不能执行变更操作!");
 #end
 </script>

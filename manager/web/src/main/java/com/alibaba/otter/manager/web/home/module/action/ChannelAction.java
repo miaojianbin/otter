@@ -99,9 +99,17 @@ public class ChannelAction extends AbstractAction {
         } catch (RepeatConfigureException rce) {
             err.setMessage("invalidChannelName");
             return;
+        } catch (ManagerException me) {
+            String errorType = findInvalidConfigureType(me);
+            if (errorType == null) throw me;
+            redirectToChannelList(nav, pageIndex, searchKey, errorType);
+            return;
+        } catch (InvalidConfigureException ice) {
+            redirectToChannelList(nav, pageIndex, searchKey, ice.getType().name());
+            return;
         }
 
-        nav.redirectToLocation("channelList.htm?pageIndex=" + pageIndex + "&searchKey=" + urlEncode(searchKey));
+        redirectToChannelList(nav, pageIndex, searchKey, null);
     }
 
     /**
@@ -118,11 +126,21 @@ public class ChannelAction extends AbstractAction {
         }
 
         // 如果channel节点下面还有关联的pipeline时，不允许删除
-        if (pipelineService.listByChannelIds(channelId).size() < 1) {
-            channelService.remove(channelId);
+        try {
+            if (pipelineService.listByChannelIds(channelId).size() < 1) {
+                channelService.remove(channelId);
+            }
+        } catch (ManagerException me) {
+            String errorType = findInvalidConfigureType(me);
+            if (errorType == null) throw me;
+            redirectToChannelList(nav, pageIndex, searchKey, errorType);
+            return;
+        } catch (InvalidConfigureException ice) {
+            redirectToChannelList(nav, pageIndex, searchKey, ice.getType().name());
+            return;
         }
 
-        nav.redirectToLocation("channelList.htm?pageIndex=" + pageIndex + "&searchKey=" + urlEncode(searchKey));
+        redirectToChannelList(nav, pageIndex, searchKey, null);
     }
 
     /**
@@ -148,15 +166,17 @@ public class ChannelAction extends AbstractAction {
             }
 
         } else if (status.equals("stop")) {
-            channelService.stopChannel(channelId);
+            try {
+                channelService.stopChannel(channelId);
+            } catch (ManagerException me) {
+                errorType = findInvalidConfigureType(me);
+                if (errorType == null) throw me;
+            } catch (InvalidConfigureException ice) {
+                errorType = ice.getType().name();
+            }
         }
 
-        if (errorType != null) {
-            nav.redirectToLocation("channelList.htm?pageIndex=" + pageIndex + "&searchKey=" + urlEncode(searchKey)
-                                   + "&errorType=" + errorType);
-        } else {
-            nav.redirectToLocation("channelList.htm?pageIndex=" + pageIndex + "&searchKey=" + urlEncode(searchKey));
-        }
+        redirectToChannelList(nav, pageIndex, searchKey, errorType);
     }
 
     /**
@@ -170,8 +190,35 @@ public class ChannelAction extends AbstractAction {
                          @Param("channelId") Long channelId, @Param("status") String status, Navigator nav)
                                                                                                            throws WebxException {
 
-        channelService.notifyChannel(channelId);
-        nav.redirectToLocation("channelList.htm?pageIndex=" + pageIndex + "&searchKey=" + urlEncode(searchKey));
+        try {
+            channelService.notifyChannel(channelId);
+        } catch (ManagerException me) {
+            String errorType = findInvalidConfigureType(me);
+            if (errorType == null) throw me;
+            redirectToChannelList(nav, pageIndex, searchKey, errorType);
+            return;
+        } catch (InvalidConfigureException ice) {
+            redirectToChannelList(nav, pageIndex, searchKey, ice.getType().name());
+            return;
+        }
+        redirectToChannelList(nav, pageIndex, searchKey, null);
+    }
+
+    private String findInvalidConfigureType(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof InvalidConfigureException) {
+                return ((InvalidConfigureException) current).getType().name();
+            }
+            current = current.getCause();
+        }
+        return null;
+    }
+
+    private void redirectToChannelList(Navigator nav, int pageIndex, String searchKey, String errorType) {
+        String location = "channelList.htm?pageIndex=" + pageIndex + "&searchKey=" + urlEncode(searchKey);
+        if (errorType != null) location += "&errorType=" + errorType;
+        nav.redirectToLocation(location);
     }
 
 }

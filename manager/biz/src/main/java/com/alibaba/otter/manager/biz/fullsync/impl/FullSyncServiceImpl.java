@@ -127,6 +127,11 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         return fullSyncTaskDao.findById(taskId);
     }
 
+    public FullSyncTaskDO findActiveByChannelId(Long channelId) {
+        requireAvailable();
+        return fullSyncTaskDao.findActiveByChannelId(channelId);
+    }
+
     public boolean isAvailable() {
         return available;
     }

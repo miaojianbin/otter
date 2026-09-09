@@ -16,6 +16,7 @@
 
 package com.alibaba.otter.manager.web.common.model;
 
+import com.alibaba.otter.manager.biz.fullsync.dal.dataobject.FullSyncTaskDO;
 import com.alibaba.otter.shared.common.model.config.channel.Channel;
 
 /**
@@ -25,6 +26,7 @@ public class SeniorChannel extends Channel {
 
     private static final long serialVersionUID = -5864547001482768341L;
     private boolean           processEmpty;
+    private FullSyncTaskDO    fullSyncTask;
 
     public boolean isProcessEmpty() {
         return processEmpty;
@@ -32,5 +34,17 @@ public class SeniorChannel extends Channel {
 
     public void setProcessEmpty(boolean processEmpty) {
         this.processEmpty = processEmpty;
+    }
+
+    public FullSyncTaskDO getFullSyncTask() {
+        return fullSyncTask;
+    }
+
+    public void setFullSyncTask(FullSyncTaskDO fullSyncTask) {
+        this.fullSyncTask = fullSyncTask;
+    }
+
+    public boolean isFullSyncRunning() {
+        return fullSyncTask != null;
     }
 }

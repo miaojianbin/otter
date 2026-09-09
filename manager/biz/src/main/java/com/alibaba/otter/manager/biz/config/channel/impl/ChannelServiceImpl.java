@@ -105,6 +105,7 @@ public class ChannelServiceImpl implements ChannelService {
         Assert.assertNotNull(channel);
 
         try {
+            rejectIfFullSyncRunning(channel.getId());
             ChannelDO channelDo = modelToDo(channel);
             if (channelDao.checkUnique(channelDo)) {
                 channelDao.update(channelDo);
@@ -128,6 +129,7 @@ public class ChannelServiceImpl implements ChannelService {
      */
     public void remove(final Long channelId) {
         Assert.assertNotNull(channelId);
+        rejectIfFullSyncRunning(channelId);
 
         transactionTemplate.execute(new TransactionCallbackWithoutResult() {
 
@@ -392,10 +394,7 @@ public class ChannelServiceImpl implements ChannelService {
                     }
 
                     ChannelStatus oldStatus = arbitrateManageService.channelEvent().status(channelDo.getId());
-                    if (!fullSyncStart && channelStatus != null && channelStatus.isStart()
-                        && isFullSyncRunning(channelId)) {
-                        throw new InvalidConfigureException(INVALID_TYPE.FULL_SYNC);
-                    }
+                    if (!fullSyncStart) rejectIfFullSyncRunning(channelId);
                     Channel channel = doToModel(channelDo);
                     // 检查下ddl/home配置
                     List<Pipeline> pipelines = channel.getPipelines();
@@ -485,6 +484,10 @@ public class ChannelServiceImpl implements ChannelService {
             logger.warn("WARN ## unable to query FULL_SYNC_TASK; normal channel start remains available", e);
             return false;
         }
+    }
+
+    private void rejectIfFullSyncRunning(Long channelId) {
+        if (isFullSyncRunning(channelId)) throw new InvalidConfigureException(INVALID_TYPE.FULL_SYNC);
     }
 
     /*----------------------DO <-> MODEL 组装方法--------------------------*/

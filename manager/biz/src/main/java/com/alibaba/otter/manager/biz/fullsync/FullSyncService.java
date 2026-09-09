@@ -13,6 +13,8 @@ public interface FullSyncService {
 
     FullSyncTaskDO findById(Long taskId);
 
+    FullSyncTaskDO findActiveByChannelId(Long channelId);
+
     boolean isAvailable();
 
     void retryStart(Long taskId);
