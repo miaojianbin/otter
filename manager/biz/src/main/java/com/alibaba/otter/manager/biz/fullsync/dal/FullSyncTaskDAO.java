@@ -15,6 +15,8 @@ public interface FullSyncTaskDAO {
 
     FullSyncTaskDO findActiveByChannelId(Long channelId);
 
+    FullSyncTaskDO findLatestByChannelId(Long channelId);
+
     void update(FullSyncTaskDO task);
 
     void failRunningTasks(String message);

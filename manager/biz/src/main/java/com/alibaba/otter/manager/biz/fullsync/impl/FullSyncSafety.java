@@ -6,7 +6,9 @@
 package com.alibaba.otter.manager.biz.fullsync.impl;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -40,6 +42,14 @@ final class FullSyncSafety {
 
     static String temporaryTableName(String prefix, Long taskId, int index) {
         return prefix + taskId + "_" + index;
+    }
+
+    static List<String> writableColumns(List<String> columns, Set<String> generatedColumns) {
+        List<String> writable = new ArrayList<String>();
+        for (String column : columns) {
+            if (!generatedColumns.contains(column.toLowerCase(Locale.ENGLISH))) writable.add(column);
+        }
+        return writable;
     }
 
     static InetSocketAddress requireSingleMediaMaster(String master, String slave) {

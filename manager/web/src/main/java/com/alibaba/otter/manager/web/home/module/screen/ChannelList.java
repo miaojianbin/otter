@@ -110,7 +110,7 @@ public class ChannelList {
             seniorChannel.setGmtModified(channel.getGmtModified());
             seniorChannel.setProcessEmpty(processEmpty);
             if (fullSyncService.isAvailable()) {
-                seniorChannel.setFullSyncTask(fullSyncService.findActiveByChannelId(channel.getId()));
+                seniorChannel.setFullSyncTask(fullSyncService.findLatestByChannelId(channel.getId()));
             }
             seniorChannels.add(seniorChannel);
         }

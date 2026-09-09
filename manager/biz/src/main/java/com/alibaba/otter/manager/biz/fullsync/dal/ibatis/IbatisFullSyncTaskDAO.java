@@ -25,6 +25,10 @@ public class IbatisFullSyncTaskDAO extends SqlMapClientDaoSupport implements Ful
         return (FullSyncTaskDO) getSqlMapClientTemplate().queryForObject("findActiveFullSyncTaskByChannelId", channelId);
     }
 
+    public FullSyncTaskDO findLatestByChannelId(Long channelId) {
+        return (FullSyncTaskDO) getSqlMapClientTemplate().queryForObject("findLatestFullSyncTaskByChannelId", channelId);
+    }
+
     public void update(FullSyncTaskDO task) {
         getSqlMapClientTemplate().update("updateFullSyncTask", task);
     }

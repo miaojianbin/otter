@@ -6,8 +6,10 @@
 package com.alibaba.otter.manager.biz.fullsync.impl;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.testng.Assert;
@@ -59,6 +61,20 @@ public class FullSyncSafetyTest {
     public void createsShortTaskScopedTemporaryNames() {
         Assert.assertEquals("__otter_fs_42_3", FullSyncSafety.temporaryTableName("__otter_fs_", 42L, 3));
         Assert.assertTrue(FullSyncSafety.temporaryTableName("__otter_bak_", Long.MAX_VALUE, 999).length() <= 64);
+    }
+
+    @Test
+    public void excludesGeneratedColumnsFromExplicitWrites() {
+        List<String> writable = FullSyncSafety.writableColumns(Arrays.asList("id", "type_code_numeric", "name"),
+            Collections.singleton("type_code_numeric"));
+        Assert.assertEquals(writable, Arrays.asList("id", "name"));
+    }
+
+    @Test
+    public void excludesGeneratedColumnsCaseInsensitively() {
+        List<String> writable = FullSyncSafety.writableColumns(Arrays.asList("ID", "TYPE_CODE_NUMERIC"),
+            Collections.singleton("type_code_numeric"));
+        Assert.assertEquals(writable, Collections.singletonList("ID"));
     }
 
     @Test

@@ -159,6 +159,10 @@ $control.setTemplate("home:navigation.vm")
 								<span class="ico_line">|</span><span class="ico_font" style="color:#999" title="全量同步完成前不能执行Channel变更操作">操作已锁定</span>
 							#end
 						#else
+							#if($channel.fullSyncTask)
+								#set ($fullSyncResultURL = $homeModule.setTarget("fullSyncInfo.vm").addQueryData("taskId", $channel.fullSyncTask.id))
+								<span class="ico_line">|</span><a href="$fullSyncResultURL"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">查看同步结果</span></a>
+							#end
 						#set ($notifyURL = $homeModule.setAction("channelAction").addQueryData("channelId", $channel.id).addQueryData("pageIndex", $paginator.page).addQueryData("searchKey", $!searchKey).addQueryData("eventSubmitDoNotify", "true").render())
     					#if($user.authorizeType.isAdmin())
 							#if($channel.status.isStart() || $channel.status.isPause())

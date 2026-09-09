@@ -41,6 +41,7 @@ public class RelativeRedirectConfigTest {
             Paths.get("src/main/resources/webapp/templates/home/screen/channelList.vm")), StandardCharsets.UTF_8);
         assertTrue(template.contains("#if($channel.fullSyncRunning)"));
         assertTrue(template.contains("查看同步进度"));
+        assertTrue(template.contains("查看同步结果"));
         assertTrue(template.contains("操作已锁定"));
         assertTrue(template.contains("fullSyncInfo.vm"));
     }

@@ -12,6 +12,8 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.alibaba.citrus.turbine.dataresolver.FormGroup;
+import com.alibaba.otter.manager.biz.fullsync.dal.dataobject.FullSyncTaskDO;
+import com.alibaba.otter.manager.web.common.model.SeniorChannel;
 
 public class FullSyncActionTest {
 
@@ -26,6 +28,19 @@ public class FullSyncActionTest {
     public void operationHandlersDoNotUseFormGroupValidation() {
         assertNoFormGroup("doCreate");
         assertNoFormGroup("doRetryStart");
+    }
+
+    @Test
+    public void channelOnlyLocksOperationsForRunningTask() {
+        SeniorChannel channel = new SeniorChannel();
+        FullSyncTaskDO task = new FullSyncTaskDO();
+        task.setStatus("RUNNING");
+        channel.setFullSyncTask(task);
+        Assert.assertTrue(channel.isFullSyncRunning());
+
+        task.setStatus("FAILED");
+        Assert.assertFalse(channel.isFullSyncRunning());
+        Assert.assertSame(channel.getFullSyncTask(), task);
     }
 
     private void assertRejected(String confirmation) {

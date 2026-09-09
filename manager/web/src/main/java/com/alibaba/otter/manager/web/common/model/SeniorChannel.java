@@ -45,6 +45,6 @@ public class SeniorChannel extends Channel {
     }
 
     public boolean isFullSyncRunning() {
-        return fullSyncTask != null;
+        return fullSyncTask != null && "RUNNING".equals(fullSyncTask.getStatus());
     }
 }

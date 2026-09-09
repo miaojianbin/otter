@@ -132,6 +132,11 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         return fullSyncTaskDao.findActiveByChannelId(channelId);
     }
 
+    public FullSyncTaskDO findLatestByChannelId(Long channelId) {
+        requireAvailable();
+        return fullSyncTaskDao.findLatestByChannelId(channelId);
+    }
+
     public boolean isAvailable() {
         return available;
     }
@@ -327,21 +332,42 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                 dataSourceCreator.destroyDataSource(source);
             }
             for (DataMediaPair pair : group.pairs) {
+                String sourceShard = mediaIdentity(pair.getSource());
+                String templateShard = mediaIdentity(template.getSource());
+                String targetTable = mediaIdentity(group.target);
                 sourceTables.add(physicalTableKey(pair.getSource(), serverIdentities));
                 DataSource pairSource = dataSourceCreator.createDataSource(pair.getSource().getSource());
                 try {
                     Map<String, ColumnDefinition> columns = readColumnDefinitions(pairSource, pair);
+                    Set<String> generatedColumns = new HashSet<String>();
                     for (Map.Entry<String, ColumnDefinition> column : columns.entrySet()) {
                         ColumnDefinition templateColumn = group.templateColumns.get(column.getKey());
                         if (templateColumn == null) {
-                            throw new IllegalStateException("source column " + column.getKey()
-                                                            + " is absent from target table template");
+                            throw new IllegalStateException("shard schema mismatch: source shard [" + sourceShard
+                                                            + "] column `" + column.getKey()
+                                                            + "` is absent from template shard [" + templateShard
+                                                            + "] used for target [" + targetTable + "]");
                         }
                         if (!templateColumn.equals(column.getValue())) {
-                            throw new IllegalStateException("source column " + column.getKey()
-                                                            + " is incompatible with target table template");
+                            throw new IllegalStateException("shard schema mismatch: source shard [" + sourceShard
+                                                            + "] column `" + column.getKey()
+                                                            + "` differs from template shard [" + templateShard
+                                                            + "] used for target [" + targetTable + "]: "
+                                                            + column.getValue().differencesFrom(templateColumn));
+                        }
+                        if (column.getValue().isGenerated()) generatedColumns.add(column.getKey());
+                    }
+                    if (pair.getColumnPairs().isEmpty()) {
+                        for (String templateColumn : group.templateColumns.keySet()) {
+                            if (!columns.containsKey(templateColumn)) {
+                                throw new IllegalStateException("shard schema mismatch: source shard [" + sourceShard
+                                                                + "] is missing column `" + templateColumn
+                                                                + "` present in template shard [" + templateShard
+                                                                + "] used for target [" + targetTable + "]");
+                            }
                         }
                     }
+                    group.generatedColumnsByPair.put(pair.getId(), generatedColumns);
                 } finally {
                     dataSourceCreator.destroyDataSource(pairSource);
                 }
@@ -474,17 +500,17 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         List<String> selected = readColumns(source, pair);
         Set<String> selectedNames = new HashSet<String>();
         for (String column : selected) selectedNames.add(column.toLowerCase(Locale.ENGLISH));
-        return readColumnDefinitions(source, pair.getSource(), selectedNames, true);
+        return readColumnDefinitions(source, pair.getSource(), selectedNames);
     }
 
     private Map<String, ColumnDefinition> readAllColumnDefinitions(DataSource source, DataMedia media) throws SQLException {
-        return readColumnDefinitions(source, media, null, false);
+        return readColumnDefinitions(source, media, null);
     }
 
     private Map<String, ColumnDefinition> readColumnDefinitions(DataSource source, DataMedia media,
-                                                                 Set<String> selectedNames,
-                                                                 boolean rejectGenerated) throws SQLException {
+                                                                 Set<String> selectedNames) throws SQLException {
         Map<String, ColumnDefinition> result = new LinkedHashMap<String, ColumnDefinition>();
+        Set<String> generatedNames = new HashSet<String>();
         Connection connection = source.getConnection();
         try {
             Statement statement = connection.createStatement();
@@ -495,17 +521,26 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                         String name = columns.getString("Field").toLowerCase(Locale.ENGLISH);
                         if (selectedNames != null && !selectedNames.contains(name)) continue;
                         String extra = StringUtils.defaultString(columns.getString("Extra"));
-                        if (rejectGenerated && StringUtils.containsIgnoreCase(extra, "GENERATED")) {
-                            throw new IllegalStateException("generated column " + name + " is not supported by full sync");
-                        }
                         result.put(name, new ColumnDefinition(columns.getString("Type"), columns.getString("Collation"),
-                            columns.getString("Null"), columns.getString("Key"), columns.getObject("Default"), extra));
+                            columns.getString("Null"), columns.getString("Key"), columns.getObject("Default"), extra,
+                            null));
+                        if (StringUtils.containsIgnoreCase(extra, "GENERATED")) generatedNames.add(name);
                     }
                 } finally {
                     columns.close();
                 }
             } finally {
                 statement.close();
+            }
+            if (!generatedNames.isEmpty()) {
+                Map<String, String> expressions = readGenerationExpressions(connection, media);
+                for (String name : generatedNames) {
+                    if (!expressions.containsKey(name)) {
+                        throw new IllegalStateException("unable to inspect generated column " + name);
+                    }
+                    ColumnDefinition definition = result.get(name);
+                    result.put(name, definition.withGenerationExpression(expressions.get(name)));
+                }
             }
         } finally {
             connection.close();
@@ -514,6 +549,29 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
             throw new IllegalStateException("unable to inspect all selected source columns");
         }
         return result;
+    }
+
+    private Map<String, String> readGenerationExpressions(Connection connection, DataMedia media) throws SQLException {
+        Map<String, String> expressions = new HashMap<String, String>();
+        PreparedStatement statement = connection.prepareStatement(
+            "SELECT COLUMN_NAME, GENERATION_EXPRESSION FROM information_schema.COLUMNS "
+            + "WHERE TABLE_SCHEMA=? AND TABLE_NAME=?");
+        try {
+            statement.setString(1, media.getNamespaceMode().getSingleValue());
+            statement.setString(2, media.getNameMode().getSingleValue());
+            ResultSet columns = statement.executeQuery();
+            try {
+                while (columns.next()) {
+                    expressions.put(columns.getString(1).toLowerCase(Locale.ENGLISH),
+                        StringUtils.defaultString(columns.getString(2)));
+                }
+            } finally {
+                columns.close();
+            }
+        } finally {
+            statement.close();
+        }
+        return expressions;
     }
 
     private Map<String, LogPosition> resetPositions(List<Pipeline> pipelines) throws Exception {
@@ -738,7 +796,9 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                 ResultSet result = statement.executeQuery("SELECT * FROM " + table(pair.getSource()));
                 try {
                     ResultSetMetaData metadata = result.getMetaData();
-                    List<String> columns = columns(metadata, pair);
+                    Set<String> generatedColumns = group.generatedColumnsByPair.get(pair.getId());
+                    if (generatedColumns == null) generatedColumns = Collections.emptySet();
+                    List<String> columns = FullSyncSafety.writableColumns(columns(metadata, pair), generatedColumns);
                     if (columns.isEmpty()) throw new IllegalStateException("no columns selected for pair " + pair.getId());
                     PreparedStatement insert = write.prepareStatement(insertSql(qualified(group.schema, group.stagingName), columns));
                     try {
@@ -998,6 +1058,10 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         return qualified(media.getNamespaceMode().getSingleValue(), media.getNameMode().getSingleValue());
     }
 
+    private String mediaIdentity(DataMedia media) {
+        return "dataSourceId=" + media.getSource().getId() + ", dataMediaId=" + media.getId() + ", table=" + table(media);
+    }
+
     private String qualified(String schema, String name) {
         return quote(schema) + "." + quote(name);
     }
@@ -1077,6 +1141,7 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         private String physicalKey;
         private String templateDdl;
         private Map<String, ColumnDefinition> templateColumns;
+        private final Map<Long, Set<String>> generatedColumnsByPair = new HashMap<Long, Set<String>>();
         private boolean hadOriginal;
         private boolean switched;
         private boolean stagingCreated;
@@ -1103,14 +1168,54 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         private final String key;
         private final String defaultValue;
         private final String extra;
+        private final String generationExpression;
 
-        ColumnDefinition(String type, String collation, String nullable, String key, Object defaultValue, String extra) {
+        ColumnDefinition(String type, String collation, String nullable, String key, Object defaultValue, String extra,
+                         String generationExpression) {
             this.type = StringUtils.lowerCase(StringUtils.defaultString(type), Locale.ENGLISH);
             this.collation = StringUtils.lowerCase(StringUtils.defaultString(collation), Locale.ENGLISH);
             this.nullable = StringUtils.upperCase(StringUtils.defaultString(nullable), Locale.ENGLISH);
             this.key = StringUtils.upperCase(StringUtils.defaultString(key), Locale.ENGLISH);
             this.defaultValue = defaultValue == null ? "<NULL>" : defaultValue.getClass().getName() + ":" + defaultValue;
             this.extra = StringUtils.lowerCase(StringUtils.defaultString(extra), Locale.ENGLISH);
+            this.generationExpression = StringUtils.trimToEmpty(generationExpression);
+        }
+
+        ColumnDefinition withGenerationExpression(String expression) {
+            return new ColumnDefinition(this, expression);
+        }
+
+        private ColumnDefinition(ColumnDefinition definition, String generationExpression) {
+            this.type = definition.type;
+            this.collation = definition.collation;
+            this.nullable = definition.nullable;
+            this.key = definition.key;
+            this.defaultValue = definition.defaultValue;
+            this.extra = definition.extra;
+            this.generationExpression = StringUtils.trimToEmpty(generationExpression);
+        }
+
+        boolean isGenerated() {
+            return StringUtils.containsIgnoreCase(extra, "generated");
+        }
+
+        String differencesFrom(ColumnDefinition template) {
+            StringBuilder differences = new StringBuilder();
+            appendDifference(differences, "type", type, template.type);
+            appendDifference(differences, "collation", collation, template.collation);
+            appendDifference(differences, "nullable", nullable, template.nullable);
+            appendDifference(differences, "key", key, template.key);
+            appendDifference(differences, "default", defaultValue, template.defaultValue);
+            appendDifference(differences, "extra", extra, template.extra);
+            appendDifference(differences, "generationExpression", generationExpression,
+                template.generationExpression);
+            return differences.toString();
+        }
+
+        private void appendDifference(StringBuilder result, String name, String current, String template) {
+            if (current.equals(template)) return;
+            if (result.length() > 0) result.append("; ");
+            result.append(name).append(" current=").append(current).append(", template=").append(template);
         }
 
         @Override
@@ -1119,7 +1224,8 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
             if (!(object instanceof ColumnDefinition)) return false;
             ColumnDefinition other = (ColumnDefinition) object;
             return type.equals(other.type) && collation.equals(other.collation) && nullable.equals(other.nullable)
-                   && key.equals(other.key) && defaultValue.equals(other.defaultValue) && extra.equals(other.extra);
+                   && key.equals(other.key) && defaultValue.equals(other.defaultValue) && extra.equals(other.extra)
+                   && generationExpression.equals(other.generationExpression);
         }
 
         @Override
@@ -1129,7 +1235,8 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
             result = 31 * result + nullable.hashCode();
             result = 31 * result + key.hashCode();
             result = 31 * result + defaultValue.hashCode();
-            return 31 * result + extra.hashCode();
+            result = 31 * result + extra.hashCode();
+            return 31 * result + generationExpression.hashCode();
         }
     }
 }

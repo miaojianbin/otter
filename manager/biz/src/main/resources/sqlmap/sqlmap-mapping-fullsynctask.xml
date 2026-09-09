@@ -17,6 +17,7 @@
   </insert>
   <select id="findFullSyncTaskById" parameterClass="long" resultMap="fullSyncTaskResult">select <include refid="columns" /> from FULL_SYNC_TASK where ID=#value#</select>
   <select id="findActiveFullSyncTaskByChannelId" parameterClass="long" resultMap="fullSyncTaskResult">select <include refid="columns" /> from FULL_SYNC_TASK where CHANNEL_ID=#value# and STATUS='RUNNING' order by ID desc limit 1</select>
+  <select id="findLatestFullSyncTaskByChannelId" parameterClass="long" resultMap="fullSyncTaskResult">select <include refid="columns" /> from FULL_SYNC_TASK where CHANNEL_ID=#value# order by ID desc limit 1</select>
   <update id="updateFullSyncTask" parameterClass="fullSyncTask">update FULL_SYNC_TASK set STATUS=#status#,STAGE=#stage#,TOTAL_ROWS=#totalRows#,COPIED_ROWS=#copiedRows#,MESSAGE=#message#,GMT_MODIFIED=now() where ID=#id#</update>
   <update id="failRunningFullSyncTasks" parameterClass="string">update FULL_SYNC_TASK set STATUS='FAILED',MESSAGE=#value#,GMT_MODIFIED=now() where STATUS='RUNNING'</update>
 </sqlMap>
