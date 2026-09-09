@@ -10,10 +10,14 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
+import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import com.alibaba.otter.manager.web.webx.filter.RelativeRedirectFilter;
 import org.eclipse.jetty.server.ForwardedRequestCustomizer;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -49,11 +53,17 @@ public class RelativeRedirectConfigTest {
     private void assertRelativeRedirect(HttpConfiguration configuration) throws Exception {
         Server server = new Server();
         LocalConnector connector = new LocalConnector(server, new HttpConnectionFactory(configuration));
+        final RelativeRedirectFilter redirectFilter = new RelativeRedirectFilter();
         server.addConnector(connector);
         server.setHandler(new AbstractHandler() {
             public void handle(String target, Request baseRequest, HttpServletRequest request,
                                HttpServletResponse response) throws IOException, ServletException {
-                response.sendRedirect("channelList.htm?pageIndex=1");
+                redirectFilter.doFilter(request, response, new FilterChain() {
+                    public void doFilter(ServletRequest request, ServletResponse response) throws IOException {
+                        ((HttpServletResponse) response).sendRedirect(
+                            "http://manager-internal:8080/channelList.htm?pageIndex=1");
+                    }
+                });
                 baseRequest.setHandled(true);
             }
         });
