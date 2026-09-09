@@ -10,9 +10,7 @@ import javax.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.alibaba.citrus.service.form.Group;
 import com.alibaba.citrus.turbine.Navigator;
-import com.alibaba.citrus.turbine.dataresolver.FormGroup;
 import com.alibaba.citrus.turbine.dataresolver.Param;
 import com.alibaba.otter.manager.biz.fullsync.FullSyncService;
 import com.alibaba.otter.manager.biz.fullsync.dal.dataobject.FullSyncTaskDO;
@@ -24,8 +22,10 @@ public class FullSyncAction {
     @Resource(name = "fullSyncService")
     private FullSyncService fullSyncService;
 
-    public void doCreate(@FormGroup("csrfCheck") Group csrfCheck, @Param("channelId") Long channelId,
-                         @Param("confirmation") String confirmation, Navigator nav) {
+    // CSRF is validated by the common pipeline. A FormGroup resolver would silently skip these event handlers
+    // when form validation fails, because WebX action events are configured as skippable.
+    public void doCreate(@Param("channelId") Long channelId, @Param("confirmation") String confirmation,
+                         Navigator nav) {
         logger.warn("WARN ## entered full sync create action for channel {}, confirmationValid={}", channelId,
                     "确认".equals(confirmation));
         if (!"确认".equals(confirmation)) {
@@ -43,7 +43,7 @@ public class FullSyncAction {
         nav.redirectToLocation("fullSyncInfo.htm?taskId=" + task.getId());
     }
 
-    public void doRetryStart(@FormGroup("csrfCheck") Group csrfCheck, @Param("taskId") Long taskId, Navigator nav) {
+    public void doRetryStart(@Param("taskId") Long taskId, Navigator nav) {
         logger.warn("WARN ## entered full sync retry action for task {}", taskId);
         fullSyncService.retryStart(taskId);
         nav.redirectToLocation("fullSyncInfo.htm?taskId=" + taskId);
