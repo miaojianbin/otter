@@ -11,8 +11,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 final class FullSyncSafety {
+
+    private static final Pattern NAMED_CONSTRAINT = Pattern.compile(
+        "(?i)\\bCONSTRAINT\\s+(`[^`]+`|[^\\s]+)\\s+(FOREIGN\\s+KEY|CHECK)");
 
     private FullSyncSafety() {
     }
@@ -28,8 +33,16 @@ final class FullSyncSafety {
 
     static void validateTemplateDdl(String ddl) {
         String upper = ddl.toUpperCase(Locale.ENGLISH);
-        if (upper.contains("FOREIGN KEY") || upper.contains(" CONSTRAINT ")) {
-            throw new IllegalStateException("tables with named constraints or foreign keys are not supported by full sync");
+        Matcher constraint = NAMED_CONSTRAINT.matcher(ddl);
+        if (constraint.find()) {
+            throw new IllegalStateException("unsupported " + constraint.group(2).toLowerCase(Locale.ENGLISH)
+                                            + " constraint " + constraint.group(1));
+        }
+        if (upper.contains("FOREIGN KEY")) {
+            throw new IllegalStateException("unsupported foreign key constraint (name unavailable)");
+        }
+        if (upper.contains(" CONSTRAINT ")) {
+            throw new IllegalStateException("unsupported named constraint (name unavailable)");
         }
         if (ddl.indexOf('(') < 0) throw new IllegalStateException("unexpected SHOW CREATE TABLE result");
     }

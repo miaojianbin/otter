@@ -46,7 +46,20 @@ public class FullSyncSafetyTest {
                 "CREATE TABLE `child` (`id` bigint, CONSTRAINT `fk_parent` FOREIGN KEY (`id`) REFERENCES `parent` (`id`))");
             Assert.fail("foreign-key DDL must be rejected");
         } catch (IllegalStateException expected) {
-            Assert.assertTrue(expected.getMessage().contains("foreign keys"));
+            Assert.assertTrue(expected.getMessage().contains("foreign key"));
+            Assert.assertTrue(expected.getMessage().contains("`fk_parent`"));
+        }
+    }
+
+    @Test
+    public void identifiesNamedCheckConstraint() {
+        try {
+            FullSyncSafety.validateTemplateDdl(
+                "CREATE TABLE `orders` (`amount` int, CONSTRAINT `chk_amount` CHECK ((`amount` >= 0)))");
+            Assert.fail("named check constraint must be rejected");
+        } catch (IllegalStateException expected) {
+            Assert.assertTrue(expected.getMessage().contains("check"));
+            Assert.assertTrue(expected.getMessage().contains("`chk_amount`"));
         }
     }
 

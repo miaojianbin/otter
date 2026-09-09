@@ -326,7 +326,13 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
             DataSource source = dataSourceCreator.createDataSource(template.getSource().getSource());
             try {
                 group.templateDdl = showCreateTable(source, table(template.getSource()));
-                FullSyncSafety.validateTemplateDdl(group.templateDdl);
+                try {
+                    FullSyncSafety.validateTemplateDdl(group.templateDdl);
+                } catch (IllegalStateException e) {
+                    throw new IllegalStateException("full sync cannot use source template ["
+                                                    + mediaIdentity(template.getSource()) + "] for target ["
+                                                    + mediaIdentity(group.target) + "]: " + e.getMessage(), e);
+                }
                 group.templateColumns = readAllColumnDefinitions(source, template.getSource());
             } finally {
                 dataSourceCreator.destroyDataSource(source);
