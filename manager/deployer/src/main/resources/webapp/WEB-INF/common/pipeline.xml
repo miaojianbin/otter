@@ -31,6 +31,8 @@
                 
         <!-- 检查csrf token，防止csrf攻击和重复提交。假如request和session中的token不匹配，则出错，或显示expired页面。 -->
         <pl-valves:checkCsrfToken />
+        <!-- 仅为全量同步请求记录WebX分发状态，不记录token、cookie或确认文本。 -->
+        <pl-valves:valve class="com.alibaba.otter.manager.web.webx.valve.FullSyncDispatchDiagnosticsValve" />
         <pl-valves:loop>
             <pl-valves:choose>
                 <when>

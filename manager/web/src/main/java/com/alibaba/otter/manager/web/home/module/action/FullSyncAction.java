@@ -26,6 +26,8 @@ public class FullSyncAction {
 
     public void doCreate(@FormGroup("csrfCheck") Group csrfCheck, @Param("channelId") Long channelId,
                          @Param("confirmation") String confirmation, Navigator nav) {
+        logger.warn("WARN ## entered full sync create action for channel {}, confirmationValid={}", channelId,
+                    "确认".equals(confirmation));
         if (!"确认".equals(confirmation)) {
             throw new IllegalArgumentException("请输入“确认”后再执行全量同步");
         }
@@ -42,6 +44,7 @@ public class FullSyncAction {
     }
 
     public void doRetryStart(@FormGroup("csrfCheck") Group csrfCheck, @Param("taskId") Long taskId, Navigator nav) {
+        logger.warn("WARN ## entered full sync retry action for task {}", taskId);
         fullSyncService.retryStart(taskId);
         nav.redirectToLocation("fullSyncInfo.htm?taskId=" + taskId);
     }
