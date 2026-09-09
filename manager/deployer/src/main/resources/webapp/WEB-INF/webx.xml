@@ -203,9 +203,9 @@
 						DataMatrixAction|switch
 						SwitchWarmupAction|switch
 						SwitchWarmupAction|restart
-						FullSyncAction|create
-						FullSyncAction|retryStart
-						FullSyncAction|retry_start
+						fullSyncAction|create
+						fullSyncAction|retryStart
+						fullSyncAction|retry_start
 					</beans:value>
 				</beans:property>
 			</beans:bean>

@@ -7,7 +7,8 @@ $control.setTemplate("home:navigation.vm")
 <!--
 	changeNav("sync");
 
-    function submitFullSync(formId) {
+    function submitFullSync(form) {
+        if (form.getAttribute("data-submitting") == "true") return false;
         var risk = "全量同步将重置 Canal 位点，并在全量导入完成后重建和切换目标表。错误的映射配置可能导致目标数据被覆盖；执行期间 Channel 将保持停止。请确认已核对映射并完成必要备份。是否继续？";
         if (!window.confirm(risk)) return false;
         var confirmation = window.prompt("这是破坏性操作。请输入“确认”后提交：", "");
@@ -15,10 +16,20 @@ $control.setTemplate("home:navigation.vm")
             if (confirmation !== null) window.alert("输入内容不正确，未提交全量同步任务。");
             return false;
         }
-        var form = document.getElementById(formId);
-        form.elements.confirmation.value = confirmation;
-        form.submit();
-        return false;
+        var confirmationField = form.elements["confirmation"];
+        if (!confirmationField) {
+            window.alert("提交表单初始化失败，请刷新页面后重试。");
+            return false;
+        }
+        confirmationField.value = confirmation;
+        form.setAttribute("data-submitting", "true");
+        var submitButton = form.getElementsByTagName("button")[0];
+        if (submitButton) {
+            submitButton.disabled = true;
+            var label = submitButton.getElementsByTagName("span")[0];
+            if (label) label.innerHTML = "正在提交...";
+        }
+        return true;
     }
 
     $(function () {
@@ -112,7 +123,7 @@ $control.setTemplate("home:navigation.vm")
       <th>Channel名字</th>
       <th>运行状态</th>
 	  <th>同步方向</th>
-	  <th>操作</th>
+	  <th width="40%">操作</th>
     </tr>
     
     #foreach ($channel in $channels)
@@ -137,7 +148,7 @@ $control.setTemplate("home:navigation.vm")
 			</td>
 	     
 		  
-		  <td><p>
+		  <td style="white-space:nowrap;">
         				#set ($channelInfoURL = $homeModule.setTarget("channelInfo.vm").addQueryData("channelId", $channel.id))
 						<a href="$channelInfoURL"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">查看</span></a>
 						
@@ -151,14 +162,14 @@ $control.setTemplate("home:navigation.vm")
 							#if($channel.status.isStop() || $channel.status.isPause())
 								#if($channel.status.isStop() && $fullSyncAvailable)
 									<span class="ico_line">|</span>
-									<form id="fullSyncForm$channel.id" method="post" style="display:inline">
-										$csrfToken.hiddenField
-										<input type="hidden" name="action" value="full_sync_action" />
-										<input type="hidden" name="event_submit_do_create" value="1" />
-										<input type="hidden" name="channelId" value="$channel.id" />
-										<input type="hidden" name="confirmation" value="" />
-										<a href="#" onclick="return submitFullSync('fullSyncForm$channel.id');"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">全量同步</span></a>
-									</form>
+					<form id="fullSyncForm$channel.id" action="$homeModule.setTarget('channelList.vm')" method="post" style="display:inline;margin:0;padding:0" onsubmit="return submitFullSync(this);">
+						$csrfToken.hiddenField
+						<input type="hidden" name="action" value="full_sync_action" />
+						<input type="hidden" name="event_submit_do_create" value="1" />
+						<input type="hidden" name="channelId" value="$channel.id" />
+						<input type="hidden" name="confirmation" value="" />
+						<button type="submit" style="border:0;background:transparent;color:#2473a2;cursor:pointer;font:inherit;margin:0;padding:0;vertical-align:middle"><img src="images/ico_edit.png" width="13" height="13" /><span class="ico_font">全量同步</span></button>
+					</form>
 								#end
 								#set($flag_go = false)
 								#set($flag_back = false)
@@ -281,7 +292,7 @@ $control.setTemplate("home:navigation.vm")
 								#end
 							#end
 						#end
-    	  </p></td>
+		  </td>
 	    </tr>
 	#end
   
