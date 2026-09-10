@@ -9,7 +9,9 @@ import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.testng.Assert;
@@ -19,36 +21,55 @@ public class FullSyncSafetyTest {
 
     @Test
     public void rejectsSourceTargetOverlap() {
-        Set<String> sources = new HashSet<String>();
-        sources.add("server-a:db:source");
-        sources.add("server-b:db:shared");
-        Set<String> targets = new HashSet<String>();
-        targets.add("server-b:db:shared");
+        Map<String, String> sources = new LinkedHashMap<String, String>();
+        sources.put("server-a:db:source", "source-a");
+        sources.put("server-b:db:shared", "source-shared");
+        Map<String, String> targets = new LinkedHashMap<String, String>();
+        targets.put("server-b:db:shared", "target-shared");
 
         try {
             FullSyncSafety.ensureNoSourceTargetOverlap(sources, targets);
             Assert.fail("overlapping source and target must be rejected");
         } catch (IllegalStateException expected) {
-            Assert.assertTrue(expected.getMessage().contains("target table"));
+            Assert.assertTrue(expected.getMessage().contains("source-shared"));
+            Assert.assertTrue(expected.getMessage().contains("target-shared"));
         }
     }
 
     @Test
     public void acceptsIndependentSourceAndTargetTables() {
-        FullSyncSafety.ensureNoSourceTargetOverlap(Collections.singleton("server-a:db:orders"),
-            Collections.singleton("server-b:db:orders"));
+        Map<String, String> sources = Collections.singletonMap("server-a:db:orders", "source-orders");
+        Map<String, String> targets = Collections.singletonMap("server-b:db:orders", "target-orders");
+        FullSyncSafety.ensureNoSourceTargetOverlap(sources, targets);
     }
 
     @Test
-    public void rejectsForeignKeyDdl() {
-        try {
-            FullSyncSafety.validateTemplateDdl(
-                "CREATE TABLE `child` (`id` bigint, CONSTRAINT `fk_parent` FOREIGN KEY (`id`) REFERENCES `parent` (`id`))");
-            Assert.fail("foreign-key DDL must be rejected");
-        } catch (IllegalStateException expected) {
-            Assert.assertTrue(expected.getMessage().contains("foreign key"));
-            Assert.assertTrue(expected.getMessage().contains("`fk_parent`"));
-        }
+    public void removesForeignKeysFromTargetDdl() {
+        String ddl = "CREATE TABLE `child` (\n"
+                     + "  `id` bigint NOT NULL,\n"
+                     + "  `kind` varchar(20) DEFAULT 'a,b',\n"
+                     + "  KEY `idx_parent` (`id`),\n"
+                     + "  CONSTRAINT `fk_parent` FOREIGN KEY (`id`) REFERENCES `parent` (`id`) ON DELETE CASCADE\n"
+                     + ") ENGINE=InnoDB";
+        FullSyncSafety.validateTemplateDdl(ddl);
+        String body = FullSyncSafety.ddlBody(ddl);
+        Assert.assertFalse(body.contains("FOREIGN KEY"));
+        Assert.assertFalse(body.contains("fk_parent"));
+        Assert.assertTrue(body.contains("KEY `idx_parent`"));
+        Assert.assertTrue(body.contains("DEFAULT 'a,b'"));
+        Assert.assertTrue(body.endsWith("ENGINE=InnoDB"));
+    }
+
+    @Test
+    public void removesMultipleNamedAndUnnamedForeignKeys() {
+        String ddl = "CREATE TABLE `child` (`id` bigint, `owner_id` bigint, "
+                     + "FOREIGN KEY (`id`) REFERENCES `parent` (`id`), "
+                     + "CONSTRAINT `fk_owner` FOREIGN KEY (`owner_id`) REFERENCES `owner` (`id`), "
+                     + "PRIMARY KEY (`id`)) ENGINE=InnoDB";
+        String body = FullSyncSafety.ddlBody(ddl);
+        Assert.assertFalse(body.toUpperCase().contains("FOREIGN KEY"));
+        Assert.assertTrue(body.contains("PRIMARY KEY (`id`)"));
+        Assert.assertTrue(body.contains("`owner_id` bigint"));
     }
 
     @Test

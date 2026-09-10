@@ -166,14 +166,17 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         try {
             requireStopped(task.getChannelId());
             List<Pipeline> pipelines = pipelineService.listByChannelIds(task.getChannelId());
-            if (pipelines.size() != 1) {
-                throw new IllegalStateException("full sync supports a single unidirectional pipeline only");
+            if (pipelines == null || pipelines.size() != 1) {
+                throw new IllegalStateException("channel " + task.getChannelId()
+                                                + " must contain exactly one unidirectional pipeline, but found "
+                                                + (pipelines == null ? 0 : pipelines.size()) + ": "
+                                                + pipelineIds(pipelines));
             }
             List<DataMediaPair> pairs = loadPairs(pipelines);
+            validatePairs(pairs);
             groups = buildGroups(pairs, taskId);
-            validateSharedDestinations(task.getChannelId(), pipelines);
             validateCanalConfigurations(pipelines);
-            validateGroups(groups);
+            validateSharedDestinations(task.getChannelId(), pipelines);
             preflightGroups(groups);
 
             requireStopped(task.getChannelId());
@@ -214,8 +217,13 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
 
     private List<DataMediaPair> loadPairs(List<Pipeline> pipelines) {
         List<DataMediaPair> pairs = new ArrayList<DataMediaPair>();
-        for (Pipeline pipeline : pipelines) pairs.addAll(dataMediaPairService.listByPipelineId(pipeline.getId()));
-        if (pairs.isEmpty()) throw new IllegalStateException("channel has no data media pair");
+        for (Pipeline pipeline : pipelines) {
+            List<DataMediaPair> loaded = dataMediaPairService.listByPipelineId(pipeline.getId());
+            if (loaded != null) pairs.addAll(loaded);
+        }
+        if (pairs.isEmpty()) {
+            throw new IllegalStateException("no DataMediaPair is configured for " + pipelineIds(pipelines));
+        }
         return pairs;
     }
 
@@ -248,7 +256,9 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         for (String destination : destinations) {
             for (Pipeline other : pipelineService.listByDestinationWithoutOther(destination)) {
                 if (!channelId.equals(other.getChannelId())) {
-                    throw new IllegalStateException("destination " + destination + " is used by another channel");
+                    throw new IllegalStateException("Canal destination `" + destination + "` used by channel "
+                                                    + channelId + " is also used by channel " + other.getChannelId()
+                                                    + " pipeline " + other.getId());
                 }
             }
         }
@@ -256,76 +266,122 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
 
     private void validateCanalConfigurations(List<Pipeline> pipelines) {
         for (Pipeline pipeline : pipelines) {
+            if (pipeline == null) throw new IllegalStateException("pipeline configuration is null");
+            if (pipeline.getParameters() == null) {
+                throw new IllegalStateException(pipelineIdentity(pipeline) + " has no PipelineParameter configuration");
+            }
             String destination = pipeline.getParameters().getDestinationName();
-            if (StringUtils.isBlank(destination) || pipeline.getParameters().getMainstemClientId() == null) {
-                throw new IllegalStateException("pipeline Canal destination or client id is missing");
+            if (StringUtils.isBlank(destination)) {
+                throw new IllegalStateException(pipelineIdentity(pipeline) + " has no Canal destination name");
+            }
+            if (pipeline.getParameters().getMainstemClientId() == null) {
+                throw new IllegalStateException(pipelineIdentity(pipeline) + " for Canal destination `" + destination
+                                                + "` has no mainstem client id");
             }
             Canal canal = canalService.findByName(destination);
             if (canal == null || canal.getCanalParameter() == null) {
-                throw new IllegalStateException("Canal configuration is missing for destination " + destination);
+                throw new IllegalStateException(pipelineIdentity(pipeline) + " references missing Canal configuration `"
+                                                + destination + "`");
             }
             CanalParameter parameter = canal.getCanalParameter();
             if (parameter.getSourcingType() == null || !parameter.getSourcingType().isMysql()) {
-                throw new IllegalStateException("full sync supports a direct MySQL Canal source only");
+                throw new IllegalStateException("Canal destination `" + destination
+                                                + "` must use MYSQL sourcing type, actual="
+                                                + String.valueOf(parameter.getSourcingType()));
             }
             if (parameter.getMetaMode() == null
                 || (!parameter.getMetaMode().isZookeeper() && !parameter.getMetaMode().isMixed())) {
-                throw new IllegalStateException("full sync requires Canal meta mode ZOOKEEPER or MIXED");
+                throw new IllegalStateException("Canal destination `" + destination
+                                                + "` must use meta mode ZOOKEEPER or MIXED, actual="
+                                                + String.valueOf(parameter.getMetaMode()));
             }
             if (parameter.getIndexMode() == null
                 || (!parameter.getIndexMode().isMeta() && !parameter.getIndexMode().isMemoryMetaFailback())) {
-                throw new IllegalStateException("full sync requires Canal index mode META or MEMORY_META_FAILBACK");
+                throw new IllegalStateException("Canal destination `" + destination
+                                                + "` must use index mode META or MEMORY_META_FAILBACK, actual="
+                                                + String.valueOf(parameter.getIndexMode()));
             }
             if (parameter.getHaMode() != null && parameter.getHaMode().isMedia()) {
-                resolveCanalAddress(parameter);
+                try {
+                    resolveCanalAddress(parameter);
+                } catch (IllegalStateException e) {
+                    throw new IllegalStateException("Canal destination `" + destination + "`: " + e.getMessage(), e);
+                }
             } else if (parameter.getGroupDbAddresses() == null || parameter.getGroupDbAddresses().size() != 1
                        || parameter.getGroupDbAddresses().get(0) == null
                        || parameter.getGroupDbAddresses().get(0).size() != 1
+                       || parameter.getGroupDbAddresses().get(0).get(0) == null
                        || parameter.getGroupDbAddresses().get(0).get(0).getType() == null
                        || !parameter.getGroupDbAddresses().get(0).get(0).getType().isMysql()) {
-                throw new IllegalStateException("full sync supports one Canal MySQL address only");
+                throw new IllegalStateException("Canal destination `" + destination
+                                                + "` must contain exactly one MYSQL source address; configured groups="
+                                                + addressGroupCount(parameter) + ", addresses in first group="
+                                                + firstAddressCount(parameter));
             }
         }
     }
 
-    private void validateGroups(List<TargetGroup> groups) {
-        for (TargetGroup group : groups) {
-            requireDirectMysql(group.target.getSource());
-            for (DataMediaPair pair : group.pairs) {
-                requireDirectMysql(pair.getSource().getSource());
-                if (!pair.getSource().getNamespaceMode().getMode().isSingle()
-                    || !pair.getSource().getNameMode().getMode().isSingle()
-                    || !pair.getTarget().getNamespaceMode().getMode().isSingle()
-                    || !pair.getTarget().getNameMode().getMode().isSingle()) {
-                    throw new IllegalStateException("full sync supports single source and target tables only");
+    private void validatePairs(List<DataMediaPair> pairs) {
+        for (DataMediaPair pair : pairs) {
+            if (pair == null) throw new IllegalStateException("DataMediaPair configuration contains a null entry");
+            if (pair.getId() == null) throw new IllegalStateException("DataMediaPair configuration has no id");
+            String pairId = "DataMediaPair " + pair.getId() + " (pipelineId=" + pair.getPipelineId() + ")";
+            if (pair.getSource() == null) throw new IllegalStateException(pairId + " has no source DataMedia");
+            if (pair.getTarget() == null) throw new IllegalStateException(pairId + " has no target DataMedia");
+            validateSingleTableMedia(pair.getSource(), pairId + " source");
+            validateSingleTableMedia(pair.getTarget(), pairId + " target");
+            requireDirectMysql(pair.getSource().getSource(), pairId + " source " + mediaIdentity(pair.getSource()));
+            requireDirectMysql(pair.getTarget().getSource(), pairId + " target " + mediaIdentity(pair.getTarget()));
+            if (pair.isExistFilter() || pair.isExistResolver()) {
+                throw new IllegalStateException(pairIdentity(pair)
+                                                + " uses unsupported mapping extensions: filter=" + pair.isExistFilter()
+                                                + ", resolver=" + pair.isExistResolver());
+            }
+            if (pair.getColumnPairs() == null) {
+                throw new IllegalStateException(pairIdentity(pair) + " has a null column mapping list");
+            }
+            for (ColumnPair columnPair : pair.getColumnPairs()) {
+                if (columnPair == null || columnPair.getSourceColumn() == null || columnPair.getTargetColumn() == null) {
+                    throw new IllegalStateException(pairIdentity(pair) + " contains an incomplete column mapping");
                 }
-                if (pair.isExistFilter() || pair.isExistResolver()) {
-                    throw new IllegalStateException("full sync does not support filter or resolver mappings");
-                }
-                for (ColumnPair columnPair : pair.getColumnPairs()) {
-                    if (!StringUtils.equals(columnPair.getSourceColumn().getName(), columnPair.getTargetColumn().getName())) {
-                        throw new IllegalStateException("full sync does not support renamed column mappings");
-                    }
+                String sourceColumn = columnPair.getSourceColumn().getName();
+                String targetColumn = columnPair.getTargetColumn().getName();
+                if (!StringUtils.equals(sourceColumn, targetColumn)) {
+                    throw new IllegalStateException(pairIdentity(pair) + " renames source column `" + sourceColumn
+                                                    + "` to target column `" + targetColumn
+                                                    + "`; renamed columns are not supported");
                 }
             }
         }
     }
 
     private void preflightGroups(List<TargetGroup> groups) throws Exception {
-        Set<String> sourceTables = new HashSet<String>();
-        Set<String> targetTables = new HashSet<String>();
+        Map<String, String> sourceTables = new LinkedHashMap<String, String>();
+        Map<String, String> targetTables = new LinkedHashMap<String, String>();
         Map<Long, String> serverIdentities = new HashMap<Long, String>();
         for (TargetGroup group : groups) {
             group.physicalKey = physicalTableKey(group.target, serverIdentities);
-            if (!targetTables.add(group.physicalKey)) {
-                throw new IllegalStateException("multiple target definitions resolve to the same physical table");
+            String previousTarget = targetTables.put(group.physicalKey, mediaIdentity(group.target));
+            if (previousTarget != null) {
+                throw new IllegalStateException("duplicate physical target: [" + previousTarget + "] and ["
+                                                + mediaIdentity(group.target) + "] both resolve to MySQL table ["
+                                                + group.physicalKey + "]");
             }
             validateTargetReplaceable(group);
             verifyTargetPrivileges(group);
             DataMediaPair template = group.pairs.get(0);
-            DataSource source = dataSourceCreator.createDataSource(template.getSource().getSource());
+            DataSource source;
             try {
-                group.templateDdl = showCreateTable(source, table(template.getSource()));
+                source = dataSourceCreator.createDataSource(template.getSource().getSource());
+            } catch (Exception e) {
+                throw precheckFailure("create source connection pool", mediaIdentity(template.getSource()), e);
+            }
+            try {
+                try {
+                    group.templateDdl = showCreateTable(source, table(template.getSource()));
+                } catch (Exception e) {
+                    throw precheckFailure("read source SHOW CREATE TABLE", mediaIdentity(template.getSource()), e);
+                }
                 try {
                     FullSyncSafety.validateTemplateDdl(group.templateDdl);
                 } catch (IllegalStateException e) {
@@ -333,7 +389,11 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                                                     + mediaIdentity(template.getSource()) + "] for target ["
                                                     + mediaIdentity(group.target) + "]: " + e.getMessage(), e);
                 }
-                group.templateColumns = readAllColumnDefinitions(source, template.getSource());
+                try {
+                    group.templateColumns = readAllColumnDefinitions(source, template.getSource());
+                } catch (Exception e) {
+                    throw precheckFailure("read source column metadata", mediaIdentity(template.getSource()), e);
+                }
             } finally {
                 dataSourceCreator.destroyDataSource(source);
             }
@@ -341,10 +401,20 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                 String sourceShard = mediaIdentity(pair.getSource());
                 String templateShard = mediaIdentity(template.getSource());
                 String targetTable = mediaIdentity(group.target);
-                sourceTables.add(physicalTableKey(pair.getSource(), serverIdentities));
-                DataSource pairSource = dataSourceCreator.createDataSource(pair.getSource().getSource());
+                sourceTables.put(physicalTableKey(pair.getSource(), serverIdentities), sourceShard);
+                DataSource pairSource;
                 try {
-                    Map<String, ColumnDefinition> columns = readColumnDefinitions(pairSource, pair);
+                    pairSource = dataSourceCreator.createDataSource(pair.getSource().getSource());
+                } catch (Exception e) {
+                    throw precheckFailure("create source connection pool", sourceShard, e);
+                }
+                try {
+                    Map<String, ColumnDefinition> columns;
+                    try {
+                        columns = readColumnDefinitions(pairSource, pair);
+                    } catch (Exception e) {
+                        throw precheckFailure("read selected source columns", sourceShard + ", pairId=" + pair.getId(), e);
+                    }
                     Set<String> generatedColumns = new HashSet<String>();
                     for (Map.Entry<String, ColumnDefinition> column : columns.entrySet()) {
                         ColumnDefinition templateColumn = group.templateColumns.get(column.getKey());
@@ -383,40 +453,64 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
     }
 
     private void validateTargetReplaceable(TargetGroup group) throws Exception {
-        DataSource target = dataSourceCreator.createDataSource(group.target.getSource());
         try {
-            Connection connection = target.getConnection();
+            DataSource target = dataSourceCreator.createDataSource(group.target.getSource());
             try {
-                if (queryCount(connection,
-                    "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE "
-                    + "WHERE REFERENCED_TABLE_SCHEMA=? AND REFERENCED_TABLE_NAME=?",
-                    group.schema,
-                    group.targetName) > 0) {
-                    throw new IllegalStateException("target tables referenced by foreign keys are not supported by full sync");
-                }
-                if (queryCount(connection,
-                    "SELECT COUNT(*) FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=? AND EVENT_OBJECT_TABLE=?",
-                    group.schema,
-                    group.targetName) > 0) {
-                    throw new IllegalStateException("target tables with triggers are not supported by full sync");
+                Connection connection = target.getConnection();
+                try {
+                    String foreignKey = queryForeignKeyReference(connection, group.schema, group.targetName);
+                    if (foreignKey != null) {
+                        throw new IllegalStateException("target [" + mediaIdentity(group.target)
+                                                        + "] is referenced by foreign key " + foreignKey
+                                                        + "; replacing this table is unsafe");
+                    }
+                    String trigger = queryTrigger(connection, group.schema, group.targetName);
+                    if (trigger != null) {
+                        throw new IllegalStateException("target [" + mediaIdentity(group.target) + "] has trigger `"
+                                                        + trigger + "`; replacing this table would lose the trigger");
+                    }
+                } finally {
+                    connection.close();
                 }
             } finally {
-                connection.close();
+                dataSourceCreator.destroyDataSource(target);
             }
-        } finally {
-            dataSourceCreator.destroyDataSource(target);
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw precheckFailure("inspect target foreign-key and trigger dependencies", mediaIdentity(group.target), e);
         }
     }
 
-    private long queryCount(Connection connection, String sql, String schema, String tableName) throws SQLException {
-        PreparedStatement statement = connection.prepareStatement(sql);
+    private String queryForeignKeyReference(Connection connection, String schema, String tableName) throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(
+            "SELECT CONSTRAINT_SCHEMA, TABLE_NAME, CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE "
+            + "WHERE REFERENCED_TABLE_SCHEMA=? AND REFERENCED_TABLE_NAME=? LIMIT 1");
         try {
             statement.setString(1, schema);
             statement.setString(2, tableName);
             ResultSet result = statement.executeQuery();
             try {
-                if (!result.next()) throw new SQLException("metadata count query returned no row");
-                return result.getLong(1);
+                if (!result.next()) return null;
+                return "`" + result.getString(1) + "`.`" + result.getString(2) + "`.`" + result.getString(3) + "`";
+            } finally {
+                result.close();
+            }
+        } finally {
+            statement.close();
+        }
+    }
+
+    private String queryTrigger(Connection connection, String schema, String tableName) throws SQLException {
+        PreparedStatement statement = connection.prepareStatement(
+            "SELECT TRIGGER_NAME FROM information_schema.TRIGGERS "
+            + "WHERE TRIGGER_SCHEMA=? AND EVENT_OBJECT_TABLE=? LIMIT 1");
+        try {
+            statement.setString(1, schema);
+            statement.setString(2, tableName);
+            ResultSet result = statement.executeQuery();
+            try {
+                return result.next() ? result.getString(1) : null;
             } finally {
                 result.close();
             }
@@ -426,66 +520,45 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
     }
 
     private void verifyTargetPrivileges(TargetGroup group) throws Exception {
-        DataSource target = dataSourceCreator.createDataSource(group.target.getSource());
+        String operation = "connect to target database";
         try {
-            Connection connection = target.getConnection();
+            DataSource target = dataSourceCreator.createDataSource(group.target.getSource());
             try {
-                Statement statement = connection.createStatement();
-                try {
-                    String checkTable = qualified(group.schema, group.checkName);
-                    String renamedTable = qualified(group.schema, group.checkRenamedName);
-                    boolean checkCreated = false;
-                    boolean renamed = false;
-                    try {
-                        if (tableExists(connection, group.schema, group.checkName)
-                            || tableExists(connection, group.schema, group.checkRenamedName)) {
-                            throw new IllegalStateException("full sync privilege-check table name already exists");
-                        }
-                        statement.execute("CREATE TABLE " + checkTable + " (`id` tinyint NOT NULL) ENGINE=InnoDB");
-                        checkCreated = true;
-                        statement.execute("INSERT INTO " + checkTable + " (`id`) VALUES (1)");
-                        statement.execute("RENAME TABLE " + checkTable + " TO " + renamedTable);
-                        checkCreated = false;
-                        renamed = true;
-                        statement.execute("DROP TABLE " + renamedTable);
-                        renamed = false;
-                    } finally {
-                        try {
-                            if (checkCreated) statement.execute("DROP TABLE IF EXISTS " + checkTable);
-                            if (renamed) statement.execute("DROP TABLE IF EXISTS " + renamedTable);
-                        } catch (SQLException cleanupError) {
-                            logger.warn("WARN ## unable to clean full sync privilege-check table", cleanupError);
-                        }
-                    }
-                } finally {
-                    statement.close();
-                }
-            } finally {
-                connection.close();
-            }
-        } finally {
-            dataSourceCreator.destroyDataSource(target);
-        }
-    }
-
-    private String physicalTableKey(DataMedia media, Map<Long, String> serverIdentities) throws Exception {
-        Long sourceId = media.getSource().getId();
-        String serverIdentity = serverIdentities.get(sourceId);
-        if (serverIdentity == null) {
-            DataSource source = dataSourceCreator.createDataSource(media.getSource());
-            try {
-                Connection connection = source.getConnection();
+                Connection connection = target.getConnection();
                 try {
                     Statement statement = connection.createStatement();
                     try {
-                        ResultSet result = statement.executeQuery("SELECT @@server_uuid");
+                        String checkTable = qualified(group.schema, group.checkName);
+                        String renamedTable = qualified(group.schema, group.checkRenamedName);
+                        boolean checkCreated = false;
+                        boolean renamed = false;
+                        operation = "check temporary table names " + checkTable + " and " + renamedTable;
+                        if (tableExists(connection, group.schema, group.checkName)
+                            || tableExists(connection, group.schema, group.checkRenamedName)) {
+                            throw new IllegalStateException("target [" + mediaIdentity(group.target)
+                                                            + "] already contains privilege-test table " + checkTable
+                                                            + " or " + renamedTable);
+                        }
                         try {
-                            if (!result.next() || StringUtils.isBlank(result.getString(1))) {
-                                throw new IllegalStateException("unable to identify MySQL server for data source " + sourceId);
-                            }
-                            serverIdentity = result.getString(1).toLowerCase(Locale.ENGLISH);
+                            operation = "CREATE TABLE " + checkTable;
+                            statement.execute("CREATE TABLE " + checkTable + " (`id` tinyint NOT NULL) ENGINE=InnoDB");
+                            checkCreated = true;
+                            operation = "INSERT INTO " + checkTable;
+                            statement.execute("INSERT INTO " + checkTable + " (`id`) VALUES (1)");
+                            operation = "RENAME TABLE " + checkTable + " TO " + renamedTable;
+                            statement.execute("RENAME TABLE " + checkTable + " TO " + renamedTable);
+                            checkCreated = false;
+                            renamed = true;
+                            operation = "DROP TABLE " + renamedTable;
+                            statement.execute("DROP TABLE " + renamedTable);
+                            renamed = false;
                         } finally {
-                            result.close();
+                            try {
+                                if (checkCreated) statement.execute("DROP TABLE IF EXISTS " + checkTable);
+                                if (renamed) statement.execute("DROP TABLE IF EXISTS " + renamedTable);
+                            } catch (SQLException cleanupError) {
+                                logger.warn("WARN ## unable to clean full sync privilege-check table", cleanupError);
+                            }
                         }
                     } finally {
                         statement.close();
@@ -494,7 +567,50 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                     connection.close();
                 }
             } finally {
-                dataSourceCreator.destroyDataSource(source);
+                dataSourceCreator.destroyDataSource(target);
+            }
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw precheckFailure("verify target privileges: " + operation, mediaIdentity(group.target), e);
+        }
+    }
+
+    private String physicalTableKey(DataMedia media, Map<Long, String> serverIdentities) throws Exception {
+        Long sourceId = media.getSource().getId();
+        String serverIdentity = serverIdentities.get(sourceId);
+        if (serverIdentity == null) {
+            try {
+                DataSource source = dataSourceCreator.createDataSource(media.getSource());
+                try {
+                    Connection connection = source.getConnection();
+                    try {
+                        Statement statement = connection.createStatement();
+                        try {
+                            ResultSet result = statement.executeQuery("SELECT @@server_uuid");
+                            try {
+                                if (!result.next() || StringUtils.isBlank(result.getString(1))) {
+                                    throw new IllegalStateException("MySQL returned an empty @@server_uuid for ["
+                                                                    + mediaIdentity(media) + "]");
+                                }
+                                serverIdentity = result.getString(1).toLowerCase(Locale.ENGLISH);
+                            } finally {
+                                result.close();
+                            }
+                        } finally {
+                            statement.close();
+                        }
+                    } finally {
+                        connection.close();
+                    }
+                } finally {
+                    dataSourceCreator.destroyDataSource(source);
+                }
+            } catch (IllegalStateException e) {
+                throw e;
+            } catch (Exception e) {
+                throw precheckFailure("identify physical MySQL server with SELECT @@server_uuid",
+                    mediaIdentity(media), e);
             }
             serverIdentities.put(sourceId, serverIdentity);
         }
@@ -542,7 +658,8 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                 Map<String, String> expressions = readGenerationExpressions(connection, media);
                 for (String name : generatedNames) {
                     if (!expressions.containsKey(name)) {
-                        throw new IllegalStateException("unable to inspect generated column " + name);
+                        throw new IllegalStateException("generated column `" + name + "` of [" + mediaIdentity(media)
+                                                        + "] is absent from information_schema.COLUMNS");
                     }
                     ColumnDefinition definition = result.get(name);
                     result.put(name, definition.withGenerationExpression(expressions.get(name)));
@@ -552,7 +669,10 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
             connection.close();
         }
         if (selectedNames != null && result.size() != selectedNames.size()) {
-            throw new IllegalStateException("unable to inspect all selected source columns");
+            Set<String> missing = new HashSet<String>(selectedNames);
+            missing.removeAll(result.keySet());
+            throw new IllegalStateException("selected source columns " + missing
+                                            + " do not exist or cannot be read from [" + mediaIdentity(media) + "]");
         }
         return result;
     }
@@ -665,6 +785,10 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
                 throw new IllegalStateException("Canal media HA group is missing");
             }
             DataMatrix matrix = dataMatrixService.findByGroupKey(parameter.getMediaGroup());
+            if (matrix == null) {
+                throw new IllegalStateException("Canal media HA group `" + parameter.getMediaGroup()
+                                                + "` does not exist");
+            }
             return FullSyncSafety.requireSingleMediaMaster(matrix.getMaster(), matrix.getSlave());
         }
         return parameter.getGroupDbAddresses().get(0).get(0).getDbAddress();
@@ -1027,7 +1151,8 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
     private void requireStopped(Long channelId) {
         ChannelStatus status = arbitrateManageService.channelEvent().status(channelId);
         if (!ChannelStatus.STOP.equals(status)) {
-            throw new IllegalStateException("channel must be stopped before and during full sync");
+            throw new IllegalStateException("channel " + channelId
+                                            + " must be STOP before and during full sync, actual status=" + status);
         }
     }
 
@@ -1050,14 +1175,68 @@ public class FullSyncServiceImpl implements FullSyncService, InitializingBean, D
         fullSyncTaskDao.update(task);
     }
 
-    private void requireDirectMysql(DataMediaSource source) {
+    private void requireDirectMysql(DataMediaSource source, String subject) {
         if (source == null || source.getType() == null || !source.getType().isMysql() || !(source instanceof DbMediaSource)) {
-            throw new IllegalStateException("full sync supports direct MySQL data media only");
+            throw new IllegalStateException(subject + " must use a direct DbMediaSource of type MYSQL, actual="
+                                            + (source == null ? "null" : source.getClass().getName() + "/" + source.getType()));
         }
         String url = ((DbMediaSource) source).getUrl();
-        if (!StringUtils.startsWithIgnoreCase(url, "jdbc:mysql://") || StringUtils.containsIgnoreCase(url, "groupKey=")) {
-            throw new IllegalStateException("full sync does not support grouped or custom MySQL data sources");
+        if (!StringUtils.startsWithIgnoreCase(url, "jdbc:mysql://")) {
+            throw new IllegalStateException(subject + " must use a jdbc:mysql:// URL, actual scheme=" + jdbcScheme(url));
         }
+        if (StringUtils.containsIgnoreCase(url, "groupKey=")) {
+            throw new IllegalStateException(subject + " uses a grouped MySQL URL containing groupKey, which is unsupported");
+        }
+    }
+
+    private void validateSingleTableMedia(DataMedia media, String subject) {
+        if (media.getSource() == null) throw new IllegalStateException(subject + " has no DataMediaSource");
+        if (StringUtils.isBlank(media.getNamespace())) throw new IllegalStateException(subject + " has no schema name");
+        if (StringUtils.isBlank(media.getName())) throw new IllegalStateException(subject + " has no table name");
+        if (!media.getNamespaceMode().getMode().isSingle() || !media.getNameMode().getMode().isSingle()) {
+            throw new IllegalStateException(subject + " must select one physical table, configured schema=`"
+                                            + media.getNamespace() + "`, table=`" + media.getName() + "`");
+        }
+    }
+
+    private String pipelineIds(List<Pipeline> pipelines) {
+        List<String> identities = new ArrayList<String>();
+        if (pipelines != null) {
+            for (Pipeline pipeline : pipelines) identities.add(pipelineIdentity(pipeline));
+        }
+        return identities.toString();
+    }
+
+    private String pipelineIdentity(Pipeline pipeline) {
+        return pipeline == null ? "pipeline=null" : "pipelineId=" + pipeline.getId() + ", name=`" + pipeline.getName() + "`";
+    }
+
+    private String pairIdentity(DataMediaPair pair) {
+        return "DataMediaPair " + pair.getId() + " [source " + mediaIdentity(pair.getSource()) + ", target "
+               + mediaIdentity(pair.getTarget()) + "]";
+    }
+
+    private int addressGroupCount(CanalParameter parameter) {
+        return parameter.getGroupDbAddresses() == null ? 0 : parameter.getGroupDbAddresses().size();
+    }
+
+    private int firstAddressCount(CanalParameter parameter) {
+        return addressGroupCount(parameter) == 0 || parameter.getGroupDbAddresses().get(0) == null ? 0
+            : parameter.getGroupDbAddresses().get(0).size();
+    }
+
+    private String jdbcScheme(String url) {
+        if (url == null) return "null";
+        int separator = url.indexOf("://");
+        return separator < 0 ? "unrecognized" : url.substring(0, separator + 3);
+    }
+
+    private IllegalStateException precheckFailure(String check, String subject, Exception cause) {
+        String detail = cause instanceof SQLException
+            ? "SQLState=" + ((SQLException) cause).getSQLState() + ", vendorCode="
+              + ((SQLException) cause).getErrorCode() + ", " + StringUtils.defaultString(cause.getMessage(), "no detail")
+            : message(cause);
+        return new IllegalStateException("precheck failed [" + check + "] for [" + subject + "]: " + detail, cause);
     }
 
     private String table(DataMedia media) {
