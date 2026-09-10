@@ -33,6 +33,9 @@ jobs:
       - name: Run full sync safety tests
         run: mvn -B -Dmaven.test.skip=false -Dmaven.javadoc.skip=true -Dtest=FullSyncSafetyTest -DfailIfNoTests=false -pl manager/biz -am test
 
+      - name: Run ZooKeeper metadata repair tests
+        run: mvn -B -Dmaven.test.skip=false -Dmaven.javadoc.skip=true -Dtest=ZookeeperMetadataRepairServiceTest -DfailIfNoTests=false -pl manager/biz -am test
+
       - name: Run full sync web confirmation tests
         run: mvn -B -Dmaven.test.skip=false -Dmaven.javadoc.skip=true -Dtest=FullSyncActionTest -DfailIfNoTests=false -pl manager/web -am test
 
