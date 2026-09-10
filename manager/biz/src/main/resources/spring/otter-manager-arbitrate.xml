@@ -10,8 +10,17 @@
     default-autowire="byName">
 
     <bean id="arbitrateConfigImpl" class="com.alibaba.otter.manager.biz.common.arbitrate.ArbitrateConfigImpl" depends-on="zookeeperClient" lazy-init="false" />
+
+    <bean id="zookeeperMetadataRepairService"
+        class="com.alibaba.otter.manager.biz.common.arbitrate.ZookeeperMetadataRepairService"
+        depends-on="arbitrateConfigImpl" lazy-init="false">
+        <property name="channelDao" ref="channelDao" />
+        <property name="pipelineDao" ref="pipelineDao" />
+        <property name="arbitrateManageService" ref="arbitrateManageService" />
+        <property name="startupRepairEnabled" value="${otter.manager.zookeeper.auto.repair:true}" />
+    </bean>
     
-    <bean id="deadNodeListener" class="com.alibaba.otter.manager.biz.common.arbitrate.DeadNodeListener" depends-on="arbitrateConfigImpl" lazy-init="false">
+    <bean id="deadNodeListener" class="com.alibaba.otter.manager.biz.common.arbitrate.DeadNodeListener" depends-on="zookeeperMetadataRepairService" lazy-init="false">
     </bean>
     
 </beans>
